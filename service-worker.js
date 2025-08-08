@@ -10,7 +10,6 @@ const urlsToCache = [
   '/moddata.js',
   '/myDB.js',
   '/manifest.json',
-  '/expenses.json',
   '/add_exp.png',
   '/mod_exp.png',
   '/sum_exp.png',
@@ -59,4 +58,5 @@ self.addEventListener('activate', event => {
       );
     })()
   );
+
 });
