@@ -1,0 +1,343 @@
+* {
+    margin: 0;
+    padding: 0;
+    font-family: 'Open Sans', sans-serif;
+    font-size: 1rem;
+    box-sizing: border-box;
+    color: white;
+}
+
+body {
+    overflow: hidden;
+}
+
+.footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 70px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background-color: #363237;
+}
+
+.footer img {
+    width: 50px;
+    height: 50px;
+    cursor: pointer;
+    transition: width 0.5s, height 0.5s;
+}
+
+.footer img.active {
+    width: 65px;
+    height: 65px;
+}
+
+.content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: calc(100% - 70px);
+    display: flex;
+}
+
+.page {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 100%;
+    overflow-y: auto;
+}
+
+.active-page {
+    margin-left: 0;
+    z-index: 2;
+    transition: margin-left 0.5s;
+}
+
+.inactive-page {
+    margin-left: -100%;
+    z-index: 1;
+    transition: margin-left 0s ease-in-out 0.65s;
+}
+
+#addExpPage {
+    position: absolute;
+    top: 0;
+    background-color: rgb(45, 66, 98);
+    padding: 10px;
+}
+
+#addExpPage input {
+    background-color: #2d4262;
+    color: white;
+    margin: 5px 10px;
+}
+
+#addExpPage select {
+    background-color: #2d4262;
+    color: white;
+    margin: 5px 10px;
+}
+
+#addExpPage button {
+    background-color: #2d4262;
+    color: white;
+    margin-top: 10px;
+    border-radius: 1rem;
+    padding: 0.5rem 1rem;
+}
+
+#modExpPage {
+    position: absolute;
+    top: 0;
+    background-color: #73605b;
+    padding: 10px;
+    display: flex;
+    height: 100%;
+    width: 100%;
+    justify-content: center;
+}
+
+#dateSecModExp {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 2.75rem;
+    width: 100%;
+    overflow: hidden;
+}
+
+#modExpTblSec {
+    position: absolute;
+    top: 2rem;
+    width: 95%;
+    height: calc(100% - 2.75rem - 0.8rem);
+    margin-top: 0.8rem;
+    border-radius: 0.8rem;
+    overflow: hidden;
+}
+.addBgcModExpTblSec {
+    background-color: #fff5;
+    box-shadow: 0 0.4rem 0.8rem #fffb;
+}
+
+.modExpTblPageHeader {
+    position: absolute;
+    top: 0;
+    width: 100%;
+    height: 2.5rem;
+    padding: 0.5rem 0.5rem;
+    overflow: hidden;
+}
+
+.addBgcmodExpTblPageHeader {
+    background-color: #fff4;
+}
+
+.page-link {
+    cursor: pointer;
+    padding: 3px 7px;
+    margin: 0 8px;
+    border: 1px solid black;
+    border-radius: 5px;
+    text-decoration: none;
+    color: black;
+}
+
+.page-link.active-link {
+    background-color: #007bff;
+    color: white;
+    font-weight: bold;
+}
+
+.modExpTblClass {
+    position: absolute;
+    top: 2.5rem;
+    left: 2.5%;
+    display: block;
+    width: 95%;
+    max-height: calc(100% - 2.5rem - 1.6rem);
+    background-color: #fffb;
+    margin: 0.8rem auto;
+    border-radius: 0.6rem;
+    overflow: auto;
+    border-collapse: collapse;
+    justify-self: center;
+}
+
+#modExpTbl th, #modExpTbl td {
+    padding: 1rem;
+    color: black;
+    font-size: 0.8rem;
+}
+
+#modExpTbl th {
+    position: sticky;
+    top: 0;
+    left: 0;
+    background-color: #d5d1defe;
+}
+
+#modExpTbl::-webkit-scrollbar {
+    width: 0.5rem;
+    height: 0.5rem;
+}
+#modExpTbl::-webkit-scrollbar-thumb {
+    border-radius: 0.5rem;
+    background-color: rgba(54, 50, 55, 0.6);
+    visibility: hidden;
+}
+#modExpTbl:hover::-webkit-scrollbar-thumb {
+    visibility: visible;
+}
+
+#modExpPage input, #modExpFrmPage input {
+    background-color: #73605b;
+    color: white;
+    margin: 10px 10px;
+}
+
+#modExpPage select, #modExpFrmPage select {
+    background-color: #73605b;
+    color: white;
+    margin: 5px 10px;
+}
+
+#modExpPage label, #modExpPage p, #modExpFrmPage label, #modExpFrmPage p {
+    margin-left: 10px;
+}
+
+#modExpFrmPage {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-color: #73605b;
+    padding: 10px;
+    display: block;
+    height: 100%;
+    width: 100%;
+    text-align: left;
+}
+
+#modExpFrmPage button {
+    background-color: #73605b;
+    color: white;
+    margin-top: 10px;
+    margin-left: 10px;
+    border-radius: 15px;
+    padding: 5px 20px;
+}
+
+#modExpFrmPage #goToModExpPage {
+    background-color: #73605b;
+    color: white;
+    position: absolute;
+    bottom: 0;
+    margin-top: 10px;
+    margin-left: 0px;
+    width: calc(100% - 20px);
+    border-radius: 15px;
+    padding: 10px 20px;
+}
+
+#sumExpPage {
+    position: absolute;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #d09683;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+.catSumExpTblClass {
+    display: block;
+    background-color: #fffb;
+    margin: 0.8rem auto;
+    border-radius: 0.6rem;
+    overflow: auto;
+    border-collapse: collapse;
+}
+
+#categoryExpTable th, #subCategoryExpTable th, #SavingsTbl th {
+    background-color: #d5d1defe;
+    width: 100%;
+    text-align: left;
+    padding: 1rem;
+    color: black;
+    font-size: 1rem;
+}
+
+
+#categoryExpTable td, #subCategoryExpTable td, #SavingsTbl td {
+    text-align: left;
+    padding: 1rem;
+    color: black;
+    font-size: 1rem;
+}
+
+
+#sumExpPage select {
+    background-color: #d09683;
+    color: white;
+    margin: 5px 10px;
+}
+
+#trendsExpPage {
+    position: absolute;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: white;
+    padding: 10px;
+}
+
+.chartTrendsDivClass {
+    overflow-x: auto; /* Enable horizontal scrolling */
+    width: 95vw; /* 95% of the viewport width */
+    border: 1px solid #ccc; /* Optional border for styling */
+    height: 320px; /* Explicitly match canvas height + padding */
+}
+
+.canvasForTrendsChartClass {
+    display: block; /* Prevent inline styles from interfering */
+    width: 800px; /* Increase canvas width to ensure all data fits */
+    height: 300px; /* Set height for better visibility */
+    flex: none; /* Prevent flexbox from resizing the canvas */
+}
+
+.forcastedExpDivClass {
+    color: black;
+    margin-top: 20px;
+}
+
+.forcastTblHeaders {
+    background-color: #d5d1defe;
+    width: 100%;
+    text-align: left;
+    padding: 1rem;
+    color: black;
+    font-size: 1rem;
+}
+
+.forcastTblDataCells {
+    text-align: left;
+    padding: 1rem;
+    color: black;
+    font-size: 1rem;
+}
+
+#goToSumExpPage {
+    background-color: rgb(45, 66, 98);
+    color: white;
+    margin-top: 10px;
+    margin-left: 0px;
+    width: calc(100% - 20px);
+    border-radius: 15px;
+    padding: 10px 20px;
+}

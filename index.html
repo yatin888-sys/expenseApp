@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="/manifest.json">
+    <link href='https://fonts.googleapis.com/css?family=Open Sans' rel='stylesheet'>
+	<link rel="stylesheet" href="styles.css">
+    <title>Expense Tracker</title>
+</head>
+<body>
+    <div class="footer">
+        <img src="add_exp.png" alt="Add Expense" id="addExpIcon">
+        <img src="mod_exp.png" alt="Modify Expense" id="modExpIcon">
+        <img src="sum_exp.png" alt="Summarize Expense" id="sumExpIcon">
+    </div>
+
+    <div class="content">
+        <div class="page" id="addExpPage">
+            <!-- Content for Add Expense Page -->
+            <label for="dateAddExp">Date: </label>
+			<input type="date" id="dateAddExp" name="dateAddExp" required><br>
+
+            <label for="amount">Amount: </label>
+			<input type="number" id="amount" name="amount" step="0.01" required><br>
+
+            <label for="description">Description: </label>
+			<input type="text" id="description" name="description" required><br>
+				
+			<label for="addExpCat">Category: </label>
+			<select name="addExpCat" id="addExpCat" required>
+			</select><br>
+
+			<label for="addExpSubCat">Sub-Category: </label>
+			<select name="addExpSubCat" id="addExpSubCat" required>
+			</select><br>
+
+			<button type="button" id="submitBtn"> Submit </button> 
+			<p id="sendToDBStatus"></p>
+
+            <button type="button" id="exportBtn"> Export </button><br>
+            <button type="button" id="importBtn"> Import </button>
+            <input type="file" id="importFile" accept=".json" style="display: none;" />
+        </div>
+
+        <div class="page" id="modExpPage">
+            <!-- Content for Modify Expense Page -->
+            <div id="dateSecModExp">
+                <label for="dateModExp">Date: </label>
+                <input type="date" id="dateModExp" name="dateModExp" required>
+                <label for="dateTypeModExp">Select Type:</label>
+                <select id="dateTypeModExp">
+                    <option value="date">Date</option>
+                    <option value="month">Month</option>
+                </select>
+            </div>
+			
+            <div id="modExpTblSec">
+                <div id="pagination"></div>
+                <table id="modExpTbl"></table>
+            </div>
+        </div>
+
+        <div class="page" id="modExpFrmPage">
+            <!-- Content for Modify Expense Form Page -->
+            <label for="dateModExpFrm">Date: </label>
+            <input type="date" id="dateModExpFrm" name="dateModExpFrm"><br>
+
+            <label for="amountModExpFrm">Amount: </label>
+            <input type="number" id="amountModExpFrm" name="amountModExpFrm" step="0.01"><br>
+        
+            <label for="descModExpFrm">Description: </label>
+            <input type="text" id="descModExpFrm" name="descModExpFrm" required><br>
+
+            <div class="fltrCatModExpFrm">
+                <label for="catModExpFrm">Category: </label>
+                <select name="catModExpFrm" id="catModExpFrm" required>
+                </select>
+            </div>
+
+            <div class="fltrSubCatModExpFrm">
+                <label for="subCatModExpFrm">Sub-Category: </label>
+                <select name="subCatModExpFrm" id="subCatModExpFrm" required>
+                </select>
+
+                <button id="fltrBtnSubCatModExpFrm">Filter</button>
+            </div>
+
+            <p id="docIDModExpFrm"></p>
+
+            <button id="updateBtnModExpFrm">Update</button>
+
+            <p id="updateDBStatus"></p>
+
+            <button id="goToModExpPage">Back</button>
+        </div>
+
+        <div class="page" id="sumExpPage">
+            <!-- Content for Summary Page -->
+            <div id="durationSec">
+                <label for="expSummryDuration">Select Duration: </label>
+                <select name="expSummryDuration" id="expSummryDuration" required>
+                    <option value="this-month">This Month</option>
+                    <option value="previous-month">Previous Month</option>
+                    <option value="this-quarter">This Quarter</option>
+                    <option value="this-year">This Year</option>
+                    <option value="previous-year">Previous Year</option>
+                    <option value="previous-to-last-year">Previous to Last Year</option>
+                </select><br>
+            </div>
+
+            <div class="divForCatChart">
+                <canvas id="canvasForCatChart"></canvas>
+            </div>
+
+            <div class="divForCatExpTable">
+                <table id="categoryExpTable">
+                </table>
+            </div>
+
+            <div class="divForSubCatChart">
+                <canvas id="canvasForSubCatChart"></canvas>
+            </div>
+
+            <div class="divForSubCatExpTable">
+                <table id="subCategoryExpTable">
+                </table>
+            </div>
+
+			<div id="divForSavingsTable">
+				<table id="SavingsTbl"></table>
+			</div>
+
+            <div id="divForSalarySection">
+
+            </div>
+        </div>
+
+        <div class="page" id="trendsExpPage">
+            <div id="chartTrends" style="overflow-x: auto; width: 95vw;">
+                <canvas id="canvasForTrendsChart"></canvas>
+            </div>
+
+            <div id="forcastedExpDiv">
+
+            </div>
+
+            <button id="goToSumExpPage">Back</button>
+        </div>
+
+    </div>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.register('service-worker.js')
+            .then(registration => {
+              console.log('Service Worker registered with scope:', registration.scope);
+            })
+            .catch(error => {
+              console.log('Service Worker registration failed:', error);
+            });
+        }
+    </script>
+	<script src="globals.js" type="module" defer></script>
+	<script src="myDB.js" type="module"></script>
+	<script src="adddata.js" type="module"></script>
+	<script src="moddata.js" type="module"></script>
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+	<script src="getdata.js" type="module"></script>
+	<script src="index.js" type="module"></script>
+</body>
+</html>
