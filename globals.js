@@ -18,7 +18,8 @@ export const addExpPageEl = {
     sendToDBStatus: document.getElementById("sendToDBStatus"),
     addExpPageDiv: document.getElementById('addExpPage'),
     importBtn: document.getElementById("importBtn"),
-    exportBtn: document.getElementById("exportBtn")
+    exportBtn: document.getElementById("exportBtn"),
+    batchSubmitBtn: document.getElementById("batchSubmitBtn")
 };
 
 export const modExpPageEl = {
