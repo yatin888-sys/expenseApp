@@ -180,18 +180,23 @@ async function importToIndexedDB(expenses) {
     const db = await openDatabase();
     const transaction = db.transaction([tableName], 'readwrite');
     const objectStore = transaction.objectStore(tableName);
-    let id = 0;
 
     // Clear the object store
     const clearRequest = objectStore.clear();
+
     clearRequest.onsuccess = () => {
         console.log('Cleared existing data');
+
+        // Sort expenses by date in ascending order
+        expenses.sort((a, b) => {
+            const dateA = new Date(a.date);
+            const dateB = new Date(b.date);
+            return dateA - dateB;
+        });
+
         // Add new data
         expenses.forEach(expense => {
-            id = id + 1;
-            let dateObj = getDateWithTimeZero(expense.date);
-            expense.date = dateObj;
-            expense.id = id;
+            expense.date = getDateWithTimeZero(expense.date);
             objectStore.add(expense);
         });
     };
