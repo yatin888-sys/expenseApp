@@ -1,20 +1,20 @@
 const CACHE_NAME = 'expensetrackercachev2';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/styles.css',
-  '/adddata.js', // Add all your JavaScript files here
-  '/getdata.js',
-  '/globals.js',
-  '/index.js',
-  '/moddata.js',
-  '/myDB.js',
-  '/manifest.json',
-  '/add_exp.png',
-  '/mod_exp.png',
-  '/sum_exp.png',
-  '/savings.png',
-  '/icons/icon-192x192.png'
+  './',
+  './index.html',
+  './styles.css',
+  './adddata.js', // Add all your JavaScript files here
+  './getdata.js',
+  './globals.js',
+  './index.js',
+  './moddata.js',
+  './myDB.js',
+  './manifest.json',
+  './add_exp.png',
+  './mod_exp.png',
+  './sum_exp.png',
+  './savings.png',
+  './icon-192x192.png'
 ];
 
 // Install a service worker
