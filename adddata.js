@@ -62,125 +62,35 @@ async function sendData() {
 
 function autoSelectCategorySubCat(descValue) {
     const desc = descValue.toLowerCase();
-    if (desc.includes("coles") || desc.includes("woolies") || desc.includes("prime products") || desc.includes("supermarket") || desc.includes("joymall") || desc.includes("groceries")) {
-        // Select "Food & Drinks" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Food & Drinks");
-        // Populate subcategories for "Food & Drinks"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Food & Drinks"]);
-        // Select "Groceries" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "Groceries");
-    } else if (desc.includes("laika") || desc.includes("coffee") || desc.includes("grain") || desc.includes("bakery") || desc.includes("cafe")) {
-        // Select "Food & Drinks" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Food & Drinks");
-        // Populate subcategories for "Food & Drinks"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Food & Drinks"]);
-        // Select "Coffee" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "Cafe");
-    } else if (desc.includes("kleenheat" || desc.includes("alinta gas") || desc.includes("atco gas") || desc.includes("aga gas"))) {
-        // Select "Utilities" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Utilities");
-        // Populate subcategories for "Utilities"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Utilities"]);
-        // Select "Gas Bill" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "Gas Bill");
-    } else if (desc.includes("electricity") || desc.includes("power") || desc.includes("synergy")) {
-        // Select "Utilities" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Utilities");
-        // Populate subcategories for "Utilities"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Utilities"]);
-        // Select "Electricity Bill" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "Electricity Bill");
-    } else if (desc.includes("sawater") || desc.includes("water corp") || desc.includes("sa water")) {
-        // Select "Utilities" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Utilities");
-        // Populate subcategories for "Utilities"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Utilities"]);
-        // Select "Water Bill" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "Water Bill");
-    } else if (desc.includes("iinet") || desc.includes("internet")) {
-        // Select "Utilities" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Utilities");
-        // Populate subcategories for "Utilities"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Utilities"]);
-        // Select "Internet Bill" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "Internet Bill");
-    } else if (desc.includes("day care")) {
-        // Select "Childcare" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Life & Entertainment");
-        // Populate subcategories for "Child Support"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Life & Entertainment"]);
-        // Select "Day Care" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "Child Support");
-    } else if (desc.includes("salary")) {
-        // Select "Income" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Income");
-        // Populate subcategories for "Income"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Income"]);
-        // Select "Salary" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "Salary");
-    } else if (desc.includes("rental")) {
-        // Select "Income" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Income");
-        // Populate subcategories for "Income"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Income"]);
-        // Select "Rental Income" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "Rental Income");
-    } else if (desc.includes("mortgage")) {
-        // Select "Housing" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Housing");
-        // Populate subcategories for "Housing"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Housing"]);
-        // Select "Mortgage" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "Mortgage");
-    } else if (desc.includes("fuel")) {
-        // Select "Vehicle" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Vehicle");
-        // Populate subcategories for "Vehicle"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Vehicle"]);
-        // Select "Fuel" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "Fuel");
-    } else if (desc.includes("parking")) {
-        // Select "Vehicle" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Vehicle");
-        // Populate subcategories for "Vehicle"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Vehicle"]);
-        // Select "Parking" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "Parking");
-    } else if (desc.includes("tranmere loan") || desc.includes("willetton loan")) {
-        // Select "Financial Expenses" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Financial Expenses");
-        // Populate subcategories for "Financial Expenses"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Financial Expenses"]);
-        // Select "Interest" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "Interest");
-    } else if (desc.includes("haircut")) {
-        // Select "Life & Entertainment" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Life & Entertainment");
-        // Populate subcategories for "Life & Entertainment"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Life & Entertainment"]);
-        // Select "Haircut" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "Haircut");
-    } else if (desc.includes("smartrider") || desc.includes("transperth") || desc.includes("smart rider")) {
-        // Select "Transportation" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Transportation");
-        // Populate subcategories for "Transportation"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Transportation"]);
-        // Select "Public Transport" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "Public Transport");
-    } else if (desc.includes("bupa") || desc.includes("health insurance")) {
-        // Select "Insurance" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Insurance");
-        // Populate subcategories for "Insurance"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Insurance"]);
-        // Select "Health" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "Health");
-    } else if (desc.includes("netflix") || desc.includes("disney")) {
-        // Select "Life & Entertainment" for category
-        changeSelectionFunc2(addExpPageEl.addExpCat, "Life & Entertainment");
-        // Populate subcategories for "Life & Entertainment"
-        populateCatSelect(addExpPageEl.addExpSubCat, expCatObj["Life & Entertainment"]);
-        // Select "TV" for sub-category
-        changeSelectionFunc2(addExpPageEl.addExpSubCat, "TV");
+
+    // Mapping array for keywords to category/subcategory
+    const keywordMap = [
+        { keywords: ["coles", "woolies", "prime products", "supermarket", "joymall", "groceries"], category: "Food & Drinks", subcategory: "Groceries" },
+        { keywords: ["laika", "coffee", "grain", "bakery", "cafe"], category: "Food & Drinks", subcategory: "Cafe" },
+        { keywords: ["kleenheat", "alinta gas", "atco gas", "aga gas"], category: "Utilities", subcategory: "Gas Bill" },
+        { keywords: ["electricity", "power", "synergy"], category: "Utilities", subcategory: "Electricity Bill" },
+        { keywords: ["sawater", "water corp", "sa water"], category: "Utilities", subcategory: "Water Bill" },
+        { keywords: ["iinet", "internet"], category: "Utilities", subcategory: "Internet Bill" },
+        { keywords: ["day care"], category: "Life & Entertainment", subcategory: "Child Support" },
+        { keywords: ["salary"], category: "Income", subcategory: "Salary" },
+        { keywords: ["rental"], category: "Income", subcategory: "Rental Income" },
+        { keywords: ["mortgage"], category: "Housing", subcategory: "Mortgage" },
+        { keywords: ["fuel"], category: "Vehicle", subcategory: "Fuel" },
+        { keywords: ["parking"], category: "Vehicle", subcategory: "Parking" },
+        { keywords: ["tranmere loan", "willetton loan"], category: "Financial Expenses", subcategory: "Interest" },
+        { keywords: ["haircut"], category: "Life & Entertainment", subcategory: "Haircut" },
+        { keywords: ["smartrider", "transperth", "smart rider"], category: "Transportation", subcategory: "Public Transport" },
+        { keywords: ["bupa", "health insurance"], category: "Insurance", subcategory: "Health" },
+        { keywords: ["netflix", "disney"], category: "Life & Entertainment", subcategory: "TV" }
+    ];
+
+    for (const entry of keywordMap) {
+        if (entry.keywords.some(keyword => desc.includes(keyword))) {
+            changeSelectionFunc2(addExpPageEl.addExpCat, entry.category);
+            populateCatSelect(addExpPageEl.addExpSubCat, expCatObj[entry.category]);
+            changeSelectionFunc2(addExpPageEl.addExpSubCat, entry.subcategory);
+            break;
+        }
     }
 }
 
