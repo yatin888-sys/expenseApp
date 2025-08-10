@@ -60,39 +60,26 @@ async function sendData() {
     addExpPageEl.addExpSubCat.value = '';
 }
 
-function autoSelectCategorySubCat(descValue) {
-    const desc = descValue.toLowerCase();
-
-    // Mapping array for keywords to category/subcategory
-    const keywordMap = [
-        { keywords: ["coles", "woolies", "prime products", "supermarket", "joymall", "groceries"], category: "Food & Drinks", subcategory: "Groceries" },
-        { keywords: ["laika", "coffee", "grain", "bakery", "cafe"], category: "Food & Drinks", subcategory: "Cafe" },
-        { keywords: ["kleenheat", "alinta gas", "atco gas", "aga gas"], category: "Utilities", subcategory: "Gas Bill" },
-        { keywords: ["electricity", "power", "synergy"], category: "Utilities", subcategory: "Electricity Bill" },
-        { keywords: ["sawater", "water corp", "sa water"], category: "Utilities", subcategory: "Water Bill" },
-        { keywords: ["iinet", "internet"], category: "Utilities", subcategory: "Internet Bill" },
-        { keywords: ["day care"], category: "Life & Entertainment", subcategory: "Child Support" },
-        { keywords: ["salary"], category: "Income", subcategory: "Salary" },
-        { keywords: ["rental"], category: "Income", subcategory: "Rental Income" },
-        { keywords: ["mortgage"], category: "Housing", subcategory: "Mortgage" },
-        { keywords: ["fuel"], category: "Vehicle", subcategory: "Fuel" },
-        { keywords: ["parking"], category: "Vehicle", subcategory: "Parking" },
-        { keywords: ["tranmere loan", "willetton loan"], category: "Financial Expenses", subcategory: "Interest" },
-        { keywords: ["haircut"], category: "Life & Entertainment", subcategory: "Haircut" },
-        { keywords: ["smartrider", "transperth", "smart rider"], category: "Transportation", subcategory: "Public Transport" },
-        { keywords: ["bupa", "health insurance"], category: "Insurance", subcategory: "Health" },
-        { keywords: ["netflix", "disney"], category: "Life & Entertainment", subcategory: "TV" }
-    ];
-
-    for (const entry of keywordMap) {
-        if (entry.keywords.some(keyword => desc.includes(keyword))) {
-            changeSelectionFunc2(addExpPageEl.addExpCat, entry.category);
-            populateCatSelect(addExpPageEl.addExpSubCat, expCatObj[entry.category]);
-            changeSelectionFunc2(addExpPageEl.addExpSubCat, entry.subcategory);
-            break;
-        }
-    }
-}
+// Move keywordMap to module scope so it can be reused
+const keywordMap = [
+    { keywords: ["coles", "woolies", "prime products", "supermarket", "joymall", "groceries"], category: "Food & Drinks", subcategory: "Groceries" },
+    { keywords: ["laika", "coffee", "grain", "bakery", "cafe"], category: "Food & Drinks", subcategory: "Cafe" },
+    { keywords: ["kleenheat", "alinta gas", "atco gas", "aga gas"], category: "Utilities", subcategory: "Gas Bill" },
+    { keywords: ["electricity", "power", "synergy"], category: "Utilities", subcategory: "Electricity Bill" },
+    { keywords: ["sawater", "water corp", "sa water"], category: "Utilities", subcategory: "Water Bill" },
+    { keywords: ["iinet", "internet"], category: "Utilities", subcategory: "Internet Bill" },
+    { keywords: ["day care"], category: "Life & Entertainment", subcategory: "Child Support" },
+    { keywords: ["salary"], category: "Income", subcategory: "Salary" },
+    { keywords: ["rental"], category: "Income", subcategory: "Rental Income" },
+    { keywords: ["mortgage"], category: "Housing", subcategory: "Mortgage" },
+    { keywords: ["fuel"], category: "Vehicle", subcategory: "Fuel" },
+    { keywords: ["parking"], category: "Vehicle", subcategory: "Parking" },
+    { keywords: ["tranmere loan", "willetton loan"], category: "Financial Expenses", subcategory: "Interest" },
+    { keywords: ["haircut"], category: "Life & Entertainment", subcategory: "Haircut" },
+    { keywords: ["smartrider", "transperth", "smart rider"], category: "Transportation", subcategory: "Public Transport" },
+    { keywords: ["bupa", "health insurance"], category: "Insurance", subcategory: "Health" },
+    { keywords: ["netflix", "disney"], category: "Life & Entertainment", subcategory: "TV" }
+];
 
 // Import Tesseract.js for OCR (add this to your HTML or install via npm if using a bundler)
 
@@ -130,13 +117,25 @@ async function handleBatchImportImage() {
                         getDateStringFromDateObj(new Date(rec.date)) === tx.date
                 );
                 if (!exists) {
+                    
+                    // Determine category/subcategory using keywordMap
+                    let cat = 'Food & Drinks';
+                    let subcat = 'Groceries';
+                    const descLower = tx.description.toLowerCase();
+                    for (const entry of keywordMap) {
+                        if (entry.keywords.some(keyword => descLower.includes(keyword))) {
+                            cat = entry.category;
+                            subcat = entry.subcategory;
+                            break;
+                        }
+                    }
                     // Add to DB
                     await addRecordToDB(tableName, {
                         date: getDateWithTimeZero(tx.date),
                         amount: tx.amount,
                         description: tx.description,
-                        category: 'Food & Drinks',
-                        subcategory: 'Groceries'
+                        category: cat,
+                        subcategory: subcat
                     });
                     addedCount++;
                 }
@@ -187,6 +186,19 @@ function parseTransactionsFromText(text) {
         }
     }
     return txs;
+}
+
+function autoSelectCategorySubCat(descValue) {
+    const desc = descValue.toLowerCase();
+
+    for (const entry of keywordMap) {
+        if (entry.keywords.some(keyword => desc.includes(keyword))) {
+            changeSelectionFunc2(addExpPageEl.addExpCat, entry.category);
+            populateCatSelect(addExpPageEl.addExpSubCat, expCatObj[entry.category]);
+            changeSelectionFunc2(addExpPageEl.addExpSubCat, entry.subcategory);
+            break; // Stop after first match
+        }
+    }
 }
 
 // Attach event listener after DOM is ready
