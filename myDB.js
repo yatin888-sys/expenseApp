@@ -194,6 +194,10 @@ async function importToIndexedDB(expenses) {
             return dateA - dateB;
         });
 
+        expenses.forEach(expense => {
+            delete expense.id;
+        });
+        
         // Add new data
         expenses.forEach(expense => {
             expense.date = getDateWithTimeZero(expense.date);
