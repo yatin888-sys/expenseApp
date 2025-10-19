@@ -757,9 +757,8 @@ async function showForecastedExpenses(nextPayDate, allHistRecords) {
     trendsExpPageEl.forcastedExpDiv.appendChild(nextPayDatePara);
 
     const categories = [
-        { category: 'Housing', subcategory: 'Rent', description: null},
-        { category: 'Housing', subcategory: 'Mortgage', description: null},
-        { category: 'Financial Expenses', subcategory: 'Interest', description: 'Willetton'},
+        { category: 'Housing', subcategory: 'Mortgage', description: "Tranmere"},
+        { category: 'Housing', subcategory: 'Mortgage', description: "Willetton"},
         { category: 'Life & Entertainment', subcategory: 'Child Support', description: null}
     ];
 
@@ -771,7 +770,7 @@ async function showForecastedExpenses(nextPayDate, allHistRecords) {
         let expenses = forecastExpenseForSubCat(allHistRecords, nextPayDate, cat.category, cat.subcategory, cat.description);
 
         // For Tranmere Home Loan change the amount
-        if (i === 1) {
+        if (i === 0 && expenses.description === null) {
             expenses = expenses.map(exp => {
                 exp.amount = 2106.26;
                 return exp;
