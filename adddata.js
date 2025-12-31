@@ -190,6 +190,7 @@ function loadPdfJs() {
 
 // Helper: process a PDF file, extract text, parse transactions and import
 async function processPDFFile(file) {
+    console.log('processPDFFile: started');
     const arrayBuffer = await file.arrayBuffer();
     const pdfjsLib = await loadPdfJs();
     if (!pdfjsLib || !pdfjsLib.getDocument) throw new Error('pdf.js failed to load');
@@ -205,10 +206,13 @@ async function processPDFFile(file) {
         fullText += '\n' + pageText;
     }
 
-    print(fullText)
+    console.log('DEBUG fullText length:', (fullText||'').length);
+    console.log('DEBUG fullText:', fullText);
     // Reuse OCR text parser to extract transactions
     // Use PDF-specific parser which looks for Date / Particulars / Debits columns
+    console.log('about to parse');
     const transactions = parseBankPdfTransactions(fullText);
+     console.log('parsed', parsed.length, parsed);
 
     const existingRecords = await getAllHistDocs(tableName);
 
@@ -426,3 +430,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 export { resetAddExpEls, sendData }
+
