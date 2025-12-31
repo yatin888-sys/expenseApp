@@ -86,6 +86,7 @@ const keywordMap = [
 // Batch import function for image files and PDFs
 async function handleBatchImportImage() {
     // Create file input dynamically (accept images and pdfs)
+    console.log("Started")
     const input = document.createElement('input');
     input.type = 'file';
     // input.accept = '.jpg,.jpeg,.bmp,.png,image/*,application/pdf,.pdf';
@@ -431,6 +432,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 export { resetAddExpEls, sendData }
+
 
 
 
