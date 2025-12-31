@@ -94,7 +94,7 @@ async function handleBatchImportImage() {
     input.onchange = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
-
+        console.log(file)
         // Decide based on file type/extension whether to treat as PDF or image
         const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
@@ -430,4 +430,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 export { resetAddExpEls, sendData }
+
 
