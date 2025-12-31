@@ -205,6 +205,7 @@ async function processPDFFile(file) {
         fullText += '\n' + pageText;
     }
 
+    print(fullText)
     // Reuse OCR text parser to extract transactions
     // Use PDF-specific parser which looks for Date / Particulars / Debits columns
     const transactions = parseBankPdfTransactions(fullText);
@@ -420,6 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
         addExpPageEl.batchSubmitBtn.addEventListener('click', handleBatchImportImage);
     }
 });
+
 
 
 
