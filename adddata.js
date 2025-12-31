@@ -210,7 +210,7 @@ async function processPDFFile(file) {
     // Reuse OCR text parser to extract transactions
     // Use PDF-specific parser which looks for Date / Particulars / Debits columns
     const transactions = parseBankPdfTransactions(fullText);
-     console.log('transactions:', transactions);
+    console.log('transactions:', transactions);
 
     const existingRecords = await getAllHistDocs(tableName);
 
@@ -250,6 +250,7 @@ function parseTransactionsFromText(text) {
     // Example line: "Grain Bakery WA - $6.80"
     // Example date header: "Friday 08 Aug 2025"
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    
     let currentDate = null;
     const txs = [];
     const dateRegex = /(\d{2} \w{3} \d{4})/; // e.g. 08 Aug 2025
@@ -290,8 +291,10 @@ function parseTransactionsFromText(text) {
 // transactions with { date: 'yyyy-mm-dd', amount: number, description: string }
 function parseBankPdfTransactions(text) {
     const rawLines = text.split('\n').map(l => l.replace(/\u00A0/g, ' ').trim());
+    console.log("rawLines:", rawLines);
     // collapse multiple empty lines while preserving order
     const lines = rawLines.filter((l) => l.length > 0);
+    console.log("lines:", lines);
     const txs = [];
 
     // Find header line index where Date, Particulars and Debits appear
@@ -428,6 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 export { resetAddExpEls, sendData }
+
 
 
 
