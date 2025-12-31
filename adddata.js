@@ -88,7 +88,7 @@ async function handleBatchImportImage() {
     // Create file input dynamically (accept images and pdfs)
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.jpg,.jpeg,.bmp,.png,image/*,application/pdf,.pdf';
+    // input.accept = '.jpg,.jpeg,.bmp,.png,image/*,application/pdf,.pdf';
     input.click();
 
     input.onchange = async (event) => {
