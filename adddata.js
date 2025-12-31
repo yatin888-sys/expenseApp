@@ -86,7 +86,6 @@ const keywordMap = [
 // Batch import function for image files and PDFs
 async function handleBatchImportImage() {
     // Create file input dynamically (accept images and pdfs)
-    console.log("Started")
     const input = document.createElement('input');
     input.type = 'file';
     // input.accept = '.jpg,.jpeg,.bmp,.png,image/*,application/pdf,.pdf';
@@ -192,7 +191,6 @@ function loadPdfJs() {
 
 // Helper: process a PDF file, extract text, parse transactions and import
 async function processPDFFile(file) {
-    console.log('processPDFFile: started');
     const arrayBuffer = await file.arrayBuffer();
     const pdfjsLib = await loadPdfJs();
     if (!pdfjsLib || !pdfjsLib.getDocument) throw new Error('pdf.js failed to load');
@@ -208,13 +206,11 @@ async function processPDFFile(file) {
         fullText += '\n' + pageText;
     }
 
-    console.log('DEBUG fullText length:', (fullText||'').length);
     console.log('DEBUG fullText:', fullText);
     // Reuse OCR text parser to extract transactions
     // Use PDF-specific parser which looks for Date / Particulars / Debits columns
-    console.log('about to parse');
     const transactions = parseBankPdfTransactions(fullText);
-     console.log('parsed', parsed.length, parsed);
+     console.log('transactions:', transactions);
 
     const existingRecords = await getAllHistDocs(tableName);
 
@@ -432,6 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 export { resetAddExpEls, sendData }
+
 
 
 
