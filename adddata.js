@@ -129,6 +129,8 @@ async function processImageFile(file) {
 
     const result = await Tesseract.recognize(file, 'eng');
     const text = result.data.text;
+    // expose extracted image OCR text for console debugging
+    window.lastExtractedImageText = text;
     const transactions = parseTransactionsFromText(text);
 
     const existingRecords = await getAllHistDocs(tableName);
@@ -201,11 +203,15 @@ async function processPDFFile(file) {
     for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
+        console.log(`Extracted text content for page ${i}:`, content);
         const pageText = content.items.map(item => item.str).join(' ');
         fullText += '\n' + pageText;
     }
 
-    console.log('DEBUG fullText:', fullText);
+    // expose extracted PDF text for console debugging
+    window.lastExtractedFullText = fullText;
+    console.log('DEBUG fullText length:', (fullText||'').length);
+    console.log('DEBUG fullText (excerpt):', (fullText||'').slice(0,800));
     // Reuse OCR text parser to extract transactions
     // Use PDF-specific parser which looks for Date / Particulars / Debits columns
     const transactions = parseBankPdfTransactions(fullText);
