@@ -208,8 +208,6 @@ async function processPDFFile(file) {
         fullText += '\n' + pageText;
     }
 
-    // expose extracted PDF text for console debugging
-    window.lastExtractedFullText = fullText;
     console.log('DEBUG fullText length:', (fullText||'').length);
     console.log('DEBUG fullText (excerpt):', (fullText||'').slice(0,800));
     // Reuse OCR text parser to extract transactions
@@ -448,6 +446,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 export { resetAddExpEls, sendData }
+
 
 
 
