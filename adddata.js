@@ -289,70 +289,82 @@ function parseTransactionsFromText(text) {
 // and then parses subsequent rows splitting on multi-space gaps. Returns array of
 // transactions with { date: 'yyyy-mm-dd', amount: number, description: string }
 function parseBankPdfTransactions(text) {
-    const rawPages = text.split('\n').map(l => l.replace(/\u00A0/g, ' ').trim());
-    console.log("rawPages:", rawPages);
-    // collapse multiple empty lines while preserving order
-    const pages = rawPages.filter((l) => l.length > 0);
-    console.log("pages:", pages);
+    // Split document into page blocks using common "Page X Of Y" markers if present
+    const pageBlocks = text.split(/Page\s+\d+\s+Of\s+\d+/i).map(p => p.replace(/\u00A0/g, ' ').trim()).filter(Boolean);
     const txs = [];
+    console.log('pageBlocks[0]:', pageBlocks[0]);
 
-    // Find header line index where Date, Particulars and Debits appear
-    let headerIdx = -1;
-    for (let i = 0; i < lines.length; i++) {
-        const l = lines[i].toLowerCase();
-        if (l.includes('date') && l.includes('particulars') && l.includes('debit')) {
-            headerIdx = i;
-            break;
-        }
-    }
+    for (const page of pageBlocks) {
+        const lines = page.split('\n').map(l => l.trim()).filter(Boolean);
 
-    if (headerIdx === -1) {
-        // Fallback to OCR parser if header not found
-        return parseTransactionsFromText(text);
-    }
-
-    // After header, transactions are often in blocks: Date line, Particulars line, Debits line (or Credits), Balance line
-    for (let i = headerIdx + 1; i < lines.length; i++) {
-        const line = lines[i];
-        // stop at footer markers
-        if (/^page \d+ of \d+/i.test(line) || /important/i.test(line) || /account details/i.test(line)) break;
-
-        // If this line looks like a date, start a record
-        if (/^(\d{1,2}\s+\w{3}\s+\d{2,4}|\d{2}[\/\-]\d{2}[\/\-]\d{4}|\d{4}-\d{2}-\d{2})/.test(line)) {
-            const dateStr = line;
-            let particulars = '';
-            let amount = null;
-
-            // particulars likely on next line(s). gather next non-empty line as particulars
-            let j = i + 1;
-            if (j < lines.length) {
-                particulars = lines[j];
-                j++;
+        // Find header line index where Date, Particulars and Debits/Credits/Balance appear
+        let headerIdx = -1;
+        for (let i = 0; i < lines.length; i++) {
+            const l = lines[i].toLowerCase();
+            if (l.includes('date') && l.includes('particulars') && l.includes('debits') && l.includes('credits') && l.includes('balance')) {
+                headerIdx = i;
+                break;
             }
+        }
 
-            // Next few lines may contain debit/credit and balance. Find the first $ amount that is NOT a balance (balance lines often end with CR/DR)
-            for (let k = j; k < Math.min(j + 4, lines.length); k++) {
-                const l = lines[k];
-                const dollarMatch = l.match(/\$\s*([0-9,]+\.\d{2})/);
-                if (dollarMatch) {
-                    const hasCRorDR = /\bCR\b|\bDR\b/i.test(l);
-                    // If it contains CR/DR it's likely a balance line; skip as debit
-                    if (!hasCRorDR) {
-                        amount = parseFloat(dollarMatch[1].replace(/,/g, ''));
-                        break;
+        if (headerIdx === -1) {
+            // fallback to simple parser for this page
+            const fallback = parseTransactionsFromText(page);
+            txs.push(...fallback);
+            continue;
+        }
+
+        const headerLine = lines[headerIdx];
+        console.log('Header line:', headerLine);
+        const h = headerLine.toLowerCase();
+        const posDate = h.indexOf('date');
+        const posPart = h.indexOf('particulars');
+        const posDeb = h.indexOf('debit');
+        const posCred = h.indexOf('credit');
+        const posBal = h.indexOf('balance');
+
+        // Determine column boundaries (end positions)
+        const col1Start = posDate >= 0 ? posDate : 0;
+        const col2Start = posPart >= 0 ? posPart : col1Start + 10;
+        const col3Start = posDeb >= 0 ? posDeb : (posCred >= 0 ? posCred : col2Start + 30);
+        const col4Start = posCred >= 0 ? posCred : (posBal >= 0 ? posBal : col3Start + 12);
+        const col5Start = posBal >= 0 ? posBal : col4Start + 12;
+
+        // parse rows after header until footer markers
+        for (let i = headerIdx + 1; i < lines.length; i++) {
+            const line = lines[i];
+            if (/^page \d+ of \d+/i.test(line) || /important/i.test(line) || /account details/i.test(line)) break;
+
+            // If this line starts with a date-like token, parse columns by substring positions
+            if (/^(\d{1,2}\s+\w{3}\s+\d{2,4}|\d{2}[\/\-]\d{2}[\/\-]\d{4}|\d{4}-\d{2}-\d{2})/.test(line)) {
+                const dateStr = (line.substring(col1Start, col2Start) || '').trim();
+                const particulars = (line.substring(col2Start, col3Start) || '').trim();
+                const debitField = (line.substring(col3Start, col4Start) || '').trim();
+                const creditField = (line.substring(col4Start, col5Start) || '').trim();
+
+                console.log('Parsed line:', { dateStr, particulars, debitField, creditField });
+
+                // extract $ amounts from debit or credit fields
+                const debitMatch = debitField.match(/\$\s*([0-9,]+\.\d{2})/);
+                const creditMatch = creditField.match(/\$\s*([0-9,]+\.\d{2})/);
+
+                let amount = null;
+                let type = null;
+                if (debitMatch) {
+                    amount = parseFloat(debitMatch[1].replace(/,/g, ''));
+                    type = 'debit';
+                } else if (creditMatch) {
+                    amount = parseFloat(creditMatch[1].replace(/,/g, ''));
+                    type = 'credit';
+                }
+
+                if (amount !== null && !isNaN(amount) && amount !== 0) {
+                    const normalized = normalizeDateString(dateStr);
+                    if (normalized) {
+                        txs.push({ date: normalized, amount: amount, description: particulars, type });
                     }
                 }
             }
-
-            if (amount !== null && !isNaN(amount) && amount !== 0) {
-                const normalized = normalizeDateString(dateStr);
-                if (normalized) {
-                    txs.push({ date: normalized, amount, description: particulars });
-                }
-            }
-
-            // advance i to continue after processed block
-            i = j + 2; // skip ahead a bit (safe guard)
         }
     }
 
