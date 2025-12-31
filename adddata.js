@@ -93,7 +93,6 @@ async function handleBatchImportImage() {
 
     input.onchange = async (event) => {
         const file = event.target.files[0];
-        console.log(file)
         if (!file) return;
         
         // Decide based on file type/extension whether to treat as PDF or image
@@ -290,11 +289,11 @@ function parseTransactionsFromText(text) {
 // and then parses subsequent rows splitting on multi-space gaps. Returns array of
 // transactions with { date: 'yyyy-mm-dd', amount: number, description: string }
 function parseBankPdfTransactions(text) {
-    const rawLines = text.split('\n').map(l => l.replace(/\u00A0/g, ' ').trim());
-    console.log("rawLines:", rawLines);
+    const rawPages = text.split('\n').map(l => l.replace(/\u00A0/g, ' ').trim());
+    console.log("rawPages:", rawPages);
     // collapse multiple empty lines while preserving order
-    const lines = rawLines.filter((l) => l.length > 0);
-    console.log("lines:", lines);
+    const pages = rawPages.filter((l) => l.length > 0);
+    console.log("pages:", pages);
     const txs = [];
 
     // Find header line index where Date, Particulars and Debits appear
@@ -431,6 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 export { resetAddExpEls, sendData }
+
 
 
 
