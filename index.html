@@ -2,181 +2,408 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-	<meta name="apple-mobile-web-app-title" content="Expenses">
-    <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Expenses">
+    <meta name="theme-color" content="#6366F1">
     <link rel="manifest" href="manifest.json">
-    <link href='https://fonts.googleapis.com/css?family=Open Sans' rel='stylesheet'>
-	<link rel="stylesheet" href="styles.css">
+    <link rel="apple-touch-icon" href="icon-192x192.png">
+    <link rel="stylesheet" href="styles.css">
     <title>Expense Tracker</title>
 </head>
 <body>
-    <div class="footer">
-        <img src="add_exp.png" alt="Add Expense" id="addExpIcon">
-        <img src="mod_exp.png" alt="Modify Expense" id="modExpIcon">
-        <img src="sum_exp.png" alt="Summarize Expense" id="sumExpIcon">
+<div id="app">
+
+    <!-- ======================== VIEWS ======================== -->
+    <main id="views">
+
+        <!-- ============== ADD VIEW ============== -->
+        <section class="view active" id="view-add" data-view="add">
+            <header class="view-header">
+                <div>
+                    <h1>Add Expense</h1>
+                    <div class="subtitle" id="todaySubtitle"></div>
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn" id="addOcrBtn" title="Scan receipt or PDF">
+                        <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M3 12h18"/></svg>
+                    </button>
+                </div>
+            </header>
+
+            <div class="card">
+                <div class="field">
+                    <input type="number" id="addAmount" class="amount-input" placeholder="$0.00" inputmode="decimal" step="0.01">
+                </div>
+                <div class="field">
+                    <label>Description</label>
+                    <input type="text" id="addDesc" placeholder="e.g. Coffee at Laika" autocomplete="off">
+                    <div id="addSuggest" class="suggest-list hidden"></div>
+                </div>
+                <div class="field">
+                    <label>Category</label>
+                    <div class="chip-row" id="addCatChips"></div>
+                </div>
+                <div class="field">
+                    <label>Sub-category</label>
+                    <div class="chip-row" id="addSubCatChips"></div>
+                </div>
+                <div class="field">
+                    <label>Date</label>
+                    <input type="date" id="addDate">
+                </div>
+                <button class="btn btn-primary btn-block btn-lg" id="addSubmitBtn">Save Expense</button>
+                <div class="status-msg" id="addStatus"></div>
+            </div>
+
+            <div class="card" id="favCard">
+                <div class="card-title">
+                    <span>Favorites</span>
+                    <button class="title-action" id="favManageBtn">Manage</button>
+                </div>
+                <div id="favList" class="chip-row"></div>
+                <div class="empty hidden" id="favEmpty">Star recent transactions to add them here.</div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Recent</div>
+                <div id="addRecentList" class="list"></div>
+                <div class="empty hidden" id="addRecentEmpty">No transactions yet.</div>
+            </div>
+        </section>
+
+        <!-- ============== BROWSE VIEW ============== -->
+        <section class="view" id="view-browse" data-view="browse">
+            <header class="view-header">
+                <div>
+                    <h1>Browse</h1>
+                    <div class="subtitle">Search, filter, and review</div>
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn" id="openFiltersBtn" title="Filters">
+                        <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M11 18h2"/></svg>
+                    </button>
+                </div>
+            </header>
+
+            <div class="search-bar">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+                <input type="search" id="searchInput" placeholder="Search descriptions, categories…" autocomplete="off">
+            </div>
+
+            <div class="chip-row" id="presetChips">
+                <button class="chip active" data-preset="all">All</button>
+                <button class="chip" data-preset="today">Today</button>
+                <button class="chip" data-preset="week">This Week</button>
+                <button class="chip" data-preset="month">This Month</button>
+                <button class="chip" data-preset="prev-month">Previous Month</button>
+                <button class="chip" data-preset="quarter">This Quarter</button>
+                <button class="chip" data-preset="year">This Year</button>
+            </div>
+
+            <div class="card heatmap-card">
+                <div class="heatmap-nav">
+                    <button class="icon-btn" id="hmPrev"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+                    <div class="month-label" id="hmLabel">—</div>
+                    <button class="icon-btn" id="hmNext"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></button>
+                </div>
+                <div class="heatmap-grid" id="hmGrid"></div>
+                <div class="heatmap-legend">
+                    <span>Less</span>
+                    <span class="swatch" style="background:#F1F5F9"></span>
+                    <span class="swatch" style="background:#C7D2FE"></span>
+                    <span class="swatch" style="background:#818CF8"></span>
+                    <span class="swatch" style="background:#4F46E5"></span>
+                    <span class="swatch" style="background:#312E81"></span>
+                    <span>More</span>
+                </div>
+            </div>
+
+            <div id="browseSummary" class="card compact row-spread">
+                <div>
+                    <div class="small muted">Showing</div>
+                    <div class="bold" id="browseCount">0 transactions</div>
+                </div>
+                <div class="center">
+                    <div class="small muted">Total</div>
+                    <div class="bold" id="browseTotal">$0</div>
+                </div>
+                <button class="btn btn-sm btn-secondary" id="browseClearFilters">Reset</button>
+            </div>
+
+            <div id="browseList"></div>
+            <div class="empty hidden" id="browseEmpty">No transactions match.</div>
+        </section>
+
+        <!-- ============== INSIGHTS VIEW ============== -->
+        <section class="view" id="view-insights" data-view="insights">
+            <header class="view-header">
+                <div>
+                    <h1>Insights</h1>
+                    <div class="subtitle">Patterns, budgets, comparisons</div>
+                </div>
+            </header>
+
+            <div class="chip-row" id="insightPeriodChips">
+                <button class="chip active" data-period="this-month">This Month</button>
+                <button class="chip" data-period="prev-month">Prev Month</button>
+                <button class="chip" data-period="quarter">This Quarter</button>
+                <button class="chip" data-period="year">This Year</button>
+                <button class="chip" data-period="prev-year">Prev Year</button>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card tinted" style="--tint-from:#DCFCE7;--tint-to:#FFFFFF">
+                    <div class="stat-label">Income</div>
+                    <div class="stat-value" id="iIncome">$0</div>
+                    <div class="stat-sub" id="iIncomeSub"></div>
+                </div>
+                <div class="stat-card tinted" style="--tint-from:#FEE2E2;--tint-to:#FFFFFF">
+                    <div class="stat-label">Expense</div>
+                    <div class="stat-value" id="iExpense">$0</div>
+                    <div class="stat-sub" id="iExpenseSub"></div>
+                </div>
+                <div class="stat-card tinted" style="--tint-from:#EEF0FF;--tint-to:#FFFFFF">
+                    <div class="stat-label">Savings</div>
+                    <div class="stat-value" id="iSavings">$0</div>
+                    <div class="stat-sub" id="iSavingsSub"></div>
+                </div>
+                <div class="stat-card tinted" style="--tint-from:#FEF3C7;--tint-to:#FFFFFF">
+                    <div class="stat-label">Savings Rate</div>
+                    <div class="stat-value" id="iSavingsRate">0%</div>
+                    <div class="stat-sub" id="iSavingsRateSub"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Year-over-Year</div>
+                <div id="yoyContent"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">By Category</div>
+                <div class="chart-wrap donut"><canvas id="catChart"></canvas></div>
+                <div id="catTable" class="list" style="margin-top:10px;"></div>
+            </div>
+
+            <div class="card hidden" id="subCatCard">
+                <div class="card-title row-spread">
+                    <span id="subCatTitle">Sub-category breakdown</span>
+                    <button class="title-action" id="subCatClose">Close</button>
+                </div>
+                <div class="chart-wrap donut"><canvas id="subCatChart"></canvas></div>
+                <div id="subCatTable" class="list" style="margin-top:10px;"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-title row-spread">
+                    <span>12-Month Trend</span>
+                    <select id="trendScope" class="btn-sm" style="padding:4px 10px;border-radius:8px;font-size:13px;width:auto;">
+                        <option value="expense">All Expense</option>
+                        <option value="income">Income</option>
+                        <option value="savings">Savings</option>
+                    </select>
+                </div>
+                <div class="chart-wrap bar" style="overflow-x:auto;">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Top Merchants</div>
+                <div id="topMerchants" class="list"></div>
+                <div class="empty hidden" id="topMerchantsEmpty">Not enough data yet.</div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Budgets vs Actual</div>
+                <div id="budgetList"></div>
+                <div class="empty hidden" id="budgetEmpty">Set monthly budgets in Settings to see progress here.</div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Quick Insights</div>
+                <div id="quickInsights"></div>
+            </div>
+
+        </section>
+
+        <!-- ============== SETTINGS VIEW ============== -->
+        <section class="view" id="view-settings" data-view="settings">
+            <header class="view-header">
+                <div>
+                    <h1>Settings</h1>
+                    <div class="subtitle">Budgets, data, preferences</div>
+                </div>
+            </header>
+
+            <div class="card">
+                <div class="card-title">Monthly Budgets</div>
+                <div id="budgetEditor"></div>
+                <div class="status-msg" id="budgetStatus"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Data</div>
+                <button class="btn btn-secondary btn-block" id="exportBtn">Export to JSON</button>
+                <div style="height:8px;"></div>
+                <button class="btn btn-secondary btn-block" id="importBtn">Import from JSON</button>
+                <input type="file" id="importFile" accept=".json" class="hidden">
+                <div style="height:8px;"></div>
+                <button class="btn btn-secondary btn-block" id="batchImportBtn">Batch Import (Image / PDF)</button>
+                <div class="status-msg" id="settingsStatus"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Manage Favorites</div>
+                <div id="favManageList"></div>
+                <div class="empty hidden" id="favManageEmpty">No favorites yet.</div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">App</div>
+                <div class="row-spread" style="margin-bottom:8px;">
+                    <span>Version</span>
+                    <span class="muted small" id="appVersion">v3.0</span>
+                </div>
+                <button class="btn btn-secondary btn-block" id="reloadAppBtn">Clear Cache & Reload</button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ======================== TAB BAR ======================== -->
+    <nav id="tabbar">
+        <button class="tab active" data-tab="add">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            Add
+        </button>
+        <button class="tab" data-tab="browse">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+            Browse
+        </button>
+        <button class="tab" data-tab="insights">
+            <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-7"/></svg>
+            Insights
+        </button>
+        <button class="tab" data-tab="settings">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+            Settings
+        </button>
+    </nav>
+</div>
+
+<!-- ======================== FILTERS SHEET ======================== -->
+<div class="sheet-overlay" id="filterSheet">
+    <div class="sheet">
+        <div class="sheet-handle"></div>
+        <h2>Filters & Sort</h2>
+
+        <div class="field">
+            <label>Categories</label>
+            <div class="chip-row" id="filterCatChips"></div>
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label>From</label>
+                <input type="date" id="filterDateFrom">
+            </div>
+            <div class="field">
+                <label>To</label>
+                <input type="date" id="filterDateTo">
+            </div>
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label>Min Amount</label>
+                <input type="number" id="filterAmtMin" step="0.01" placeholder="0">
+            </div>
+            <div class="field">
+                <label>Max Amount</label>
+                <input type="number" id="filterAmtMax" step="0.01" placeholder="∞">
+            </div>
+        </div>
+
+        <div class="field">
+            <label>Sort By</label>
+            <select id="filterSort">
+                <option value="date-desc">Date — Newest first</option>
+                <option value="date-asc">Date — Oldest first</option>
+                <option value="amount-desc">Amount — High to low</option>
+                <option value="amount-asc">Amount — Low to high</option>
+            </select>
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-secondary btn-block" id="filterReset">Reset</button>
+            <button class="btn btn-primary btn-block" id="filterApply">Apply</button>
+        </div>
     </div>
+</div>
 
-    <div class="content">
-        <div class="page" id="addExpPage">
-            <!-- Content for Add Expense Page -->
-            <label for="dateAddExp">Date: </label>
-			<input type="date" id="dateAddExp" name="dateAddExp" required><br>
-
-            <label for="amount">Amount: </label>
-			<input type="number" id="amount" name="amount" step="0.01" required><br>
-
-            <label for="description">Description: </label>
-			<input type="text" id="description" name="description" required><br>
-				
-			<label for="addExpCat">Category: </label>
-			<select name="addExpCat" id="addExpCat" required>
-			</select><br>
-
-			<label for="addExpSubCat">Sub-Category: </label>
-			<select name="addExpSubCat" id="addExpSubCat" required>
-			</select><br>
-
-			<button type="button" id="submitBtn"> Submit </button> 
-			<p id="sendToDBStatus"></p>
-
-            <button type="button" id="exportBtn"> Export </button><br>
-            <button type="button" id="importBtn"> Import </button>
-            <input type="file" id="importFile" accept=".json" style="display: none;" />
-            <br>
-            <button type="button" id="batchSubmitBtn"> Batch Submit </button>
+<!-- ======================== EDIT MODAL ======================== -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal">
+        <div class="row-spread" style="margin-bottom:14px;">
+            <h2 id="editTitle">Edit Expense</h2>
+            <button class="icon-btn" id="editClose">
+                <svg viewBox="0 0 24 24"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+            </button>
         </div>
 
-        <div class="page" id="modExpPage">
-            <!-- Content for Modify Expense Page -->
-            <div id="dateSecModExp">
-                <label for="dateModExp">Date: </label>
-                <input type="date" id="dateModExp" name="dateModExp" required>
-                <label for="dateTypeModExp">Select Type:</label>
-                <select id="dateTypeModExp">
-                    <option value="date">Date</option>
-                    <option value="month">Month</option>
-                </select>
-            </div>
-			
-            <div id="modExpTblSec">
-                <div id="pagination"></div>
-                <table id="modExpTbl"></table>
-            </div>
+        <div class="field">
+            <label>Amount</label>
+            <input type="number" id="editAmount" step="0.01" inputmode="decimal">
+        </div>
+        <div class="field">
+            <label>Description</label>
+            <input type="text" id="editDesc">
+        </div>
+        <div class="field">
+            <label>Category</label>
+            <select id="editCat"></select>
+        </div>
+        <div class="field">
+            <label>Sub-category</label>
+            <select id="editSubCat"></select>
+        </div>
+        <div class="field">
+            <label>Date</label>
+            <input type="date" id="editDate">
         </div>
 
-        <div class="page" id="modExpFrmPage">
-            <!-- Content for Modify Expense Form Page -->
-            <label for="dateModExpFrm">Date: </label>
-            <input type="date" id="dateModExpFrm" name="dateModExpFrm"><br>
-
-            <label for="amountModExpFrm">Amount: </label>
-            <input type="number" id="amountModExpFrm" name="amountModExpFrm" step="0.01"><br>
-        
-            <label for="descModExpFrm">Description: </label>
-            <input type="text" id="descModExpFrm" name="descModExpFrm" required><br>
-
-            <div class="fltrCatModExpFrm">
-                <label for="catModExpFrm">Category: </label>
-                <select name="catModExpFrm" id="catModExpFrm" required>
-                </select>
-            </div>
-
-            <div class="fltrSubCatModExpFrm">
-                <label for="subCatModExpFrm">Sub-Category: </label>
-                <select name="subCatModExpFrm" id="subCatModExpFrm" required>
-                </select>
-
-                <button id="fltrBtnSubCatModExpFrm">Filter</button>
-            </div>
-
-            <p id="docIDModExpFrm"></p>
-
-            <button id="updateBtnModExpFrm">Update</button>
-
-            <p id="updateDBStatus"></p>
-
-            <button id="goToModExpPage">Back</button>
+        <div class="field-row" style="margin-top:6px;">
+            <button class="btn btn-secondary" id="editFavBtn">★ Favorite</button>
+            <button class="btn btn-danger" id="editDeleteBtn">Delete</button>
         </div>
-
-        <div class="page" id="sumExpPage">
-            <!-- Content for Summary Page -->
-            <div id="durationSec">
-                <label for="expSummryDuration">Select Duration: </label>
-                <select name="expSummryDuration" id="expSummryDuration" required>
-                    <option value="this-month">This Month</option>
-                    <option value="previous-month">Previous Month</option>
-                    <option value="this-quarter">This Quarter</option>
-                    <option value="this-year">This Year</option>
-                    <option value="previous-year">Previous Year</option>
-                    <option value="previous-to-last-year">Previous to Last Year</option>
-                </select><br>
-            </div>
-
-            <div class="divForCatChart">
-                <canvas id="canvasForCatChart"></canvas>
-            </div>
-
-            <div class="divForCatExpTable">
-                <table id="categoryExpTable">
-                </table>
-            </div>
-
-            <div class="divForSubCatChart">
-                <canvas id="canvasForSubCatChart"></canvas>
-            </div>
-
-            <div class="divForSubCatExpTable">
-                <table id="subCategoryExpTable">
-                </table>
-            </div>
-
-			<div id="divForSavingsTable">
-				<table id="SavingsTbl"></table>
-			</div>
-
-            <div id="divForSalarySection">
-
-            </div>
-        </div>
-
-        <div class="page" id="trendsExpPage">
-            <div id="chartTrends" style="overflow-x: auto; width: 95vw;">
-                <canvas id="canvasForTrendsChart"></canvas>
-            </div>
-
-            <div id="forcastedExpDiv">
-
-            </div>
-
-            <button id="goToSumExpPage">Back</button>
-        </div>
-
+        <button class="btn btn-primary btn-block btn-lg" id="editSaveBtn" style="margin-top:10px;">Save Changes</button>
+        <div class="status-msg" id="editStatus"></div>
     </div>
+</div>
 
-    <script>
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.register('service-worker.js')
-            .then(registration => {
-              console.log('Service Worker registered with scope:', registration.scope);
-            })
-            .catch(error => {
-              console.log('Service Worker registration failed:', error);
-            });
-        }
-    </script>
-	<script src="globals.js" type="module" defer></script>
-	<script src="myDB.js" type="module"></script>
-	<script src="adddata.js" type="module"></script>
-	<script src="moddata.js" type="module"></script>
-	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-	<script src="getdata.js" type="module"></script>
-	<script src="index.js" type="module"></script>
+<!-- ======================== TOAST ======================== -->
+<div class="toast" id="toast"></div>
+
+<!-- File inputs (hidden) -->
+<input type="file" id="ocrFile" class="hidden">
+
+<!-- Service worker -->
+<script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('service-worker.js').catch(e => console.warn('SW registration failed', e));
+    }
+</script>
+
+<!-- Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+<!-- App -->
+<script src="db.js" type="module"></script>
+<script src="app.js" type="module"></script>
 </body>
-
 </html>
-

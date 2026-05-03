@@ -2,16 +2,23 @@
     "name": "Expense Tracker",
     "short_name": "Expenses",
     "start_url": "./index.html",
+    "scope": "./",
     "display": "standalone",
-    "background_color": "#ffffff",
-    "theme_color": "#000000",
+    "orientation": "portrait",
+    "background_color": "#F2F4FA",
+    "theme_color": "#6366F1",
     "icons": [
-      {
-        "src": "icon-192x192.png",
-        "sizes": "192x192",
-        "type": "image/png"
-      }
+        {
+            "src": "icon-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "icon-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
     ]
-
-  }
-
+}

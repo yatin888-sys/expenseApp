@@ -1,62 +1,62 @@
-const CACHE_NAME = 'expensetrackercachev2';
+const CACHE_NAME = 'expensetracker-v3';
 const urlsToCache = [
-  './',
-  './index.html',
-  './styles.css',
-  './adddata.js', // Add all your JavaScript files here
-  './getdata.js',
-  './globals.js',
-  './index.js',
-  './moddata.js',
-  './myDB.js',
-  './manifest.json',
-  './add_exp.png',
-  './mod_exp.png',
-  './sum_exp.png',
-  './savings.png',
-  './icon-192x192.png'
+    './',
+    './index.html',
+    './styles.css',
+    './app.js',
+    './db.js',
+    './manifest.json',
+    './icon-192x192.png'
 ];
 
-// Install a service worker
-self.addEventListener('install', event => {
-  event.waitUntil(
-    (async () => {
-      const cache = await caches.open(CACHE_NAME);
-      console.log('Opened cache');
-      await cache.addAll(urlsToCache);
-    })()
-  );
-  
+self.addEventListener('install', (event) => {
+    self.skipWaiting();
+    event.waitUntil(
+        (async () => {
+            const cache = await caches.open(CACHE_NAME);
+            try {
+                await cache.addAll(urlsToCache);
+            } catch (e) {
+                console.warn('Cache addAll partial failure', e);
+            }
+        })()
+    );
 });
 
-// Cache and return requests
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    (async () => {
-      const response = await caches.match(event.request);
-      // Cache hit - return response
-      if (response) {
-        return response;
-      }
-      return fetch(event.request);
-    })()
-  );
+self.addEventListener('activate', (event) => {
+    event.waitUntil(
+        (async () => {
+            const keys = await caches.keys();
+            await Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)));
+            await self.clients.claim();
+        })()
+    );
 });
 
-// Update a service worker
-self.addEventListener('activate', event => {
-  const cacheWhitelist = [CACHE_NAME];
-  event.waitUntil(
-    (async () => {
-      const cacheNames = await caches.keys();
-      await Promise.all(
-        cacheNames.map(cacheName => {
-          if (!cacheWhitelist.includes(cacheName)) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })()
-  );
-
+self.addEventListener('fetch', (event) => {
+    const req = event.request;
+    if (req.method !== 'GET') return;
+    event.respondWith(
+        (async () => {
+            // Cache-first for our same-origin assets
+            const cached = await caches.match(req);
+            if (cached) return cached;
+            try {
+                const resp = await fetch(req);
+                // Optionally cache successful same-origin responses
+                if (resp && resp.status === 200 && new URL(req.url).origin === self.location.origin) {
+                    const cache = await caches.open(CACHE_NAME);
+                    cache.put(req, resp.clone());
+                }
+                return resp;
+            } catch (e) {
+                // Fallback to root for navigation requests when offline
+                if (req.mode === 'navigate') {
+                    const fallback = await caches.match('./index.html');
+                    if (fallback) return fallback;
+                }
+                throw e;
+            }
+        })()
+    );
 });
