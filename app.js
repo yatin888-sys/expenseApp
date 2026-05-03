@@ -59,6 +59,8 @@ const state = {
     expensesCache: null, // for browse/insights – invalidated on writes
     insightsPeriod: 'this-month',
     trendScope: 'expense',
+    trendCategory: null,    // when set, trend is filtered to this category
+    trendSubcategory: null, // when set, trend is filtered to this sub-category (within trendCategory if also set)
     browse: {
         preset: 'all',
         query: '',
@@ -179,6 +181,10 @@ function escapeHTML(s) {
 }
 
 function todayISO() { return dateToISO(new Date()); }
+
+function safeScrollIntoView(el, opts = { behavior: 'smooth', block: 'start' }) {
+    if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView(opts);
+}
 
 function showToast(msg) {
     const t = $('toast');
@@ -941,7 +947,10 @@ function renderCategoryTable(byCat, total) {
             </div>
             <div class="amount">${fmtMoney(amt)}</div>
         `;
-        row.addEventListener('click', () => drillSubcategory(cat));
+        row.addEventListener('click', () => {
+            drillSubcategory(cat);
+            setTrendFilter({ category: cat });
+        });
         target.appendChild(row);
     });
     // Total row
@@ -1013,18 +1022,72 @@ async function drillSubcategory(category) {
             </div>
             <div class="amount">${fmtMoney(amt)}</div>
         `;
+        row.addEventListener('click', () => {
+            setTrendFilter({ category, subcategory: sub });
+        });
         tbody.appendChild(row);
     });
-    $('subCatCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    safeScrollIntoView($('subCatCard'));
 }
 
 $('subCatClose').addEventListener('click', () => $('subCatCard').classList.add('hidden'));
+
+function updateTrendScopeLabel() {
+    const el = $('trendScopeLabel');
+    if (!el) return;
+    if (state.trendSubcategory) {
+        const c = state.trendCategory ? CATEGORIES[state.trendCategory] : null;
+        el.innerHTML = `<span class="badge" style="background:${(c?.color || '#6366F1') + '22'};color:${c?.color || '#6366F1'}">${c?.emoji || '🔎'} ${escapeHTML(state.trendSubcategory)}</span> <button class="link small" id="clearTrendFilterBtn" style="background:none;border:none;padding:0;">Clear</button>`;
+    } else if (state.trendCategory) {
+        const c = CATEGORIES[state.trendCategory] || CATEGORIES.Others;
+        el.innerHTML = `<span class="badge" style="background:${c.color}22;color:${c.color}">${c.emoji} ${escapeHTML(state.trendCategory)}</span> <button class="link small" id="clearTrendFilterBtn" style="background:none;border:none;padding:0;">Clear</button>`;
+    } else {
+        el.innerHTML = '';
+    }
+    const clr = $('clearTrendFilterBtn');
+    if (clr) clr.addEventListener('click', () => {
+        state.trendCategory = null;
+        state.trendSubcategory = null;
+        ensureCache().then(all => renderTrend(all));
+    });
+}
+
+function setTrendFilter({ category = null, subcategory = null } = {}) {
+    state.trendCategory = category;
+    state.trendSubcategory = subcategory;
+    ensureCache().then(all => {
+        renderTrend(all);
+        const trendCard = $('trendChart').closest('.card');
+        safeScrollIntoView(trendCard);
+    });
+}
 
 function renderTrend(all) {
     const months = 12;
     const today = startOfDay(new Date());
     const labels = [];
     const data = [];
+
+    const fCat = state.trendCategory;     // null or category name
+    const fSub = state.trendSubcategory;  // null or sub-category name
+
+    function valueFor(monthRecs) {
+        if (fSub) {
+            return monthRecs.filter(r => r.subcategory === fSub && (!fCat || r.category === fCat)).reduce((s,r) => s + r.amount, 0);
+        }
+        if (fCat) {
+            return monthRecs.filter(r => r.category === fCat).reduce((s,r) => s + r.amount, 0);
+        }
+        if (state.trendScope === 'expense') return monthRecs.filter(r => r.category !== 'Income').reduce((s,r) => s + r.amount, 0);
+        if (state.trendScope === 'income')  return monthRecs.filter(r => r.category === 'Income').reduce((s,r) => s + r.amount, 0);
+        if (state.trendScope === 'savings') {
+            const inc = monthRecs.filter(r => r.category === 'Income').reduce((s,r) => s + r.amount, 0);
+            const exp = monthRecs.filter(r => r.category !== 'Income').reduce((s,r) => s + r.amount, 0);
+            return inc - exp;
+        }
+        return 0;
+    }
+
     for (let i = months - 1; i >= 0; i--) {
         const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
         labels.push(d.toLocaleDateString(undefined, { month: 'short' }));
@@ -1032,23 +1095,26 @@ function renderTrend(all) {
             const dt = new Date(r.date);
             return dt.getFullYear() === d.getFullYear() && dt.getMonth() === d.getMonth();
         });
-        let v = 0;
-        if (state.trendScope === 'expense') v = monthRecs.filter(r => r.category !== 'Income').reduce((s,r) => s + r.amount, 0);
-        else if (state.trendScope === 'income') v = monthRecs.filter(r => r.category === 'Income').reduce((s,r) => s + r.amount, 0);
-        else if (state.trendScope === 'savings') {
-            const inc = monthRecs.filter(r => r.category === 'Income').reduce((s,r) => s + r.amount, 0);
-            const exp = monthRecs.filter(r => r.category !== 'Income').reduce((s,r) => s + r.amount, 0);
-            v = inc - exp;
-        }
-        data.push(parseFloat(v.toFixed(2)));
+        data.push(parseFloat(valueFor(monthRecs).toFixed(2)));
     }
     // Moving avg (cumulative running)
     let cum = 0;
     const movAvg = data.map((v, i) => { cum += v; return parseFloat((cum / (i+1)).toFixed(2)); });
 
     if (state.charts.trend) state.charts.trend.destroy();
-    const baseColor = state.trendScope === 'income' ? '#10B981' : state.trendScope === 'savings' ? '#6366F1' : '#EC4899';
-    const fillColor = state.trendScope === 'income' ? 'rgba(16,185,129,.2)' : state.trendScope === 'savings' ? 'rgba(99,102,241,.2)' : 'rgba(236,72,153,.2)';
+
+    // Pick colour: if filtering by category/sub, use that category's colour
+    let baseColor, fillColor;
+    if (fCat) {
+        const cc = (CATEGORIES[fCat] || CATEGORIES.Others).color;
+        baseColor = cc;
+        fillColor = cc + '33';
+    } else if (state.trendScope === 'income') { baseColor = '#10B981'; fillColor = 'rgba(16,185,129,.2)'; }
+    else if (state.trendScope === 'savings') { baseColor = '#6366F1'; fillColor = 'rgba(99,102,241,.2)'; }
+    else                                      { baseColor = '#EC4899'; fillColor = 'rgba(236,72,153,.2)'; }
+
+    // Update scope label
+    updateTrendScopeLabel();
     state.charts.trend = new Chart($('trendChart').getContext('2d'), {
         data: {
             labels,
@@ -1473,20 +1539,61 @@ $('searchInput').addEventListener('input', (e) => {
     renderBrowse();
 });
 
-$('hmPrev').addEventListener('click', () => {
+function gotoPrevMonth() {
     let { year, month } = state.heatmap;
     month--; if (month < 0) { month = 11; year--; }
     state.heatmap.year = year; state.heatmap.month = month;
     state.heatmap.selectedDay = null;
     renderBrowse();
-});
-$('hmNext').addEventListener('click', () => {
+}
+function gotoNextMonth() {
     let { year, month } = state.heatmap;
     month++; if (month > 11) { month = 0; year++; }
     state.heatmap.year = year; state.heatmap.month = month;
     state.heatmap.selectedDay = null;
     renderBrowse();
-});
+}
+$('hmPrev').addEventListener('click', gotoPrevMonth);
+$('hmNext').addEventListener('click', gotoNextMonth);
+
+// Swipe across the calendar to navigate months
+(function setupHeatmapSwipe() {
+    const card = document.querySelector('.heatmap-card');
+    if (!card) return;
+    let sx = 0, sy = 0, st = 0, swiping = false;
+    const THRESH_X = 40;     // min horizontal distance
+    const MAX_OFFAXIS = 60;  // max vertical drift to still count as horizontal
+    const MAX_DURATION = 700; // ms
+
+    card.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) { swiping = false; return; }
+        const t = e.touches[0];
+        sx = t.clientX; sy = t.clientY; st = Date.now(); swiping = true;
+    }, { passive: true });
+
+    card.addEventListener('touchmove', (e) => {
+        if (!swiping) return;
+        const t = e.touches[0];
+        // If user is swiping mostly vertically, abandon (let page scroll)
+        if (Math.abs(t.clientY - sy) > MAX_OFFAXIS) swiping = false;
+    }, { passive: true });
+
+    card.addEventListener('touchend', (e) => {
+        if (!swiping) return;
+        swiping = false;
+        const t = (e.changedTouches && e.changedTouches[0]) || null;
+        if (!t) return;
+        const dx = t.clientX - sx;
+        const dy = t.clientY - sy;
+        const dt = Date.now() - st;
+        if (dt > MAX_DURATION) return;
+        if (Math.abs(dy) > MAX_OFFAXIS) return;
+        if (Math.abs(dx) < THRESH_X) return;
+        // Don't trigger if swipe started on a tappable day (let click win)
+        if (dx > 0) gotoPrevMonth();
+        else gotoNextMonth();
+    });
+})();
 
 $('openFiltersBtn').addEventListener('click', openFilterSheet);
 $('filterReset').addEventListener('click', resetBrowseFilters);
@@ -1507,6 +1614,8 @@ $$('#insightPeriodChips .chip').forEach(c => c.addEventListener('click', () => {
 
 $('trendScope').addEventListener('change', (e) => {
     state.trendScope = e.target.value;
+    state.trendCategory = null;
+    state.trendSubcategory = null;
     renderInsights();
 });
 
@@ -1538,6 +1647,10 @@ document.addEventListener('keydown', (e) => {
 (async function init() {
     setupAddDescSuggest();
     resetAddForm();
+    await ensureCache();
+    refreshAddRecentsAndFavs();
+})();
+resetAddForm();
     await ensureCache();
     refreshAddRecentsAndFavs();
 })();
