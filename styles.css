@@ -110,7 +110,7 @@ body {
     inset: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 18px 16px calc(var(--tabbar-h) + var(--safe-bot) + 24px);
+    padding: 18px 12px calc(var(--tabbar-h) + var(--safe-bot) + 24px);
     opacity: 0;
     pointer-events: none;
     transform: translateY(8px);
@@ -597,11 +597,14 @@ button {
 
 /* ============================ Calendar heatmap ============================ */
 
+.heatmap-card { padding: 14px 10px; }
+
 .heatmap-card .heatmap-nav {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 12px;
+    padding: 0 4px;
 }
 
 .heatmap-nav .month-label {
@@ -611,13 +614,15 @@ button {
 
 .heatmap-grid {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 5px;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 4px;
+    width: 100%;
 }
 
 .heatmap-grid .dow,
 .heatmap-grid .cell {
     aspect-ratio: 1 / 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -625,6 +630,7 @@ button {
     border-radius: 9px;
     font-size: 11px;
     color: var(--text-muted);
+    overflow: hidden;
 }
 
 .heatmap-grid .dow {
@@ -644,6 +650,7 @@ button {
     cursor: pointer;
     border: 1.5px solid transparent;
     position: relative;
+    padding: 2px;
 }
 
 .heatmap-grid .cell.day.today {
@@ -657,11 +664,16 @@ button {
 }
 
 .heatmap-grid .cell .amt {
-    font-size: 9px;
+    font-size: 8.5px;
     font-weight: 600;
     margin-top: 1px;
     color: inherit;
     opacity: .85;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.1;
 }
 
 .heatmap-legend {
