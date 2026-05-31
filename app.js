@@ -1658,6 +1658,9 @@ function renderQuickInsights(all, periodKey, recs) {
 // Maintenance, plus Tax/Fees/Advisory) vs non-deductible (Mortgage principal).
 
 const PROPERTY_SUBURBS = ['Tranmere', 'Willetton'];
+// Investment properties — expenses on these are tax-deductible per AU rules.
+// Currently only Tranmere; Willetton is PPOR.
+const INVESTMENT_SUBURBS = new Set(['Tranmere']);
 
 // (category, subcategory) → deductible bucket label for an investment property.
 // Subcategories not listed here go into "Other" (non-deductible by default).
@@ -1737,7 +1740,6 @@ async function renderProperty() {
     // Header note (PPOR vs investment).
     // PPOR (primary residence) → no deductions. Investment → deductions per DEDUCTIBLE_MAP.
     // Currently only Tranmere is treated as investment; Willetton is PPOR.
-    const INVESTMENT_SUBURBS = new Set(['Tranmere']);
     const isPPOR = suburb === 'Willetton';
     let note = '';
     if (isPPOR) {
@@ -1840,8 +1842,9 @@ function renderIncomeByEarner(all, fyStartYear) {
         return d >= start && d <= end;
     };
 
-    // Salary by earner → employer → total
-    const buckets = {}; // earner → { employers: { name → total }, total }
+    // Salary by earner → employer → { total, rows[] }.
+    // We keep source records per bucket so the UI can expand to show date+amount per pay.
+    const buckets = {};
     for (const e of EARNERS) buckets[e] = { employers: {}, total: 0 };
     for (const r of all) {
         if (r.category !== 'Income' || r.subcategory !== 'Salary') continue;
@@ -1849,32 +1852,60 @@ function renderIncomeByEarner(all, fyStartYear) {
         const earner = detectEarner(r.description);
         if (!earner) continue;
         const emp = (r.employer || '').trim() || '(Unspecified)';
-        buckets[earner].employers[emp] = (buckets[earner].employers[emp] || 0) + r.amount;
+        if (!buckets[earner].employers[emp]) buckets[earner].employers[emp] = { total: 0, rows: [] };
+        buckets[earner].employers[emp].total += r.amount;
+        buckets[earner].employers[emp].rows.push(r);
         buckets[earner].total += r.amount;
     }
 
-    // 50/50 share of Tranmere rental income (description contains 'Tranmere').
-    const rentalTotal = all.filter(r => r.category === 'Income' && r.subcategory === 'Rental Income'
-        && (r.description || '').toLowerCase().includes('tranmere') && inFY(r))
+    // Net Tranmere rental (gross rental income MINUS deductible property expenses),
+    // split 50/50. This is the figure that hits each owner's taxable income under AU
+    // negative-gearing rules; a loss reduces taxable income.
+    const tranmereRecs = all.filter(r => recordSuburb(r) === 'Tranmere' && inFY(r));
+    const rentalIncomeGross = tranmereRecs
+        .filter(r => r.category === 'Income' && r.subcategory === 'Rental Income')
         .reduce((s, r) => s + r.amount, 0);
-    const rentalShare = rentalTotal / 2;
+    const rentalDeductions = tranmereRecs
+        .filter(r => r.category !== 'Income' && DEDUCTIBLE_MAP[`${r.category}|${r.subcategory}`])
+        .reduce((s, r) => s + r.amount, 0);
+    const netRental = rentalIncomeGross - rentalDeductions;
+    const rentalShare = netRental / 2;
 
     const html = EARNERS.map(earner => {
         const b = buckets[earner];
-        const empEntries = Object.entries(b.employers).sort((a,c) => c[1] - a[1]);
+        const empEntries = Object.entries(b.employers).sort((a,c) => c[1].total - a[1].total);
         const empRows = empEntries.length
-            ? empEntries.map(([emp, amt]) => `<div class="row-spread" style="padding:4px 0;">
-                <span class="muted small">${escapeHTML(emp)}</span>
-                <span>${fmtMoney(amt)}</span>
-            </div>`).join('')
+            ? empEntries.map(([emp, eb]) => {
+                // Build per-pay rows (newest first) shown inside the expanded <details>.
+                const recsHtml = eb.rows
+                    .sort((a,b2) => new Date(b2.date) - new Date(a.date))
+                    .map(r => `<div class="row-spread" style="padding:3px 0;font-size:13px;">
+                        <span class="muted">${escapeHTML(r.description)} <span class="small">${formatRowDate(r.date)}</span></span>
+                        <span>${fmtMoney(r.amount)}</span>
+                    </div>`).join('');
+                return `<details style="border-bottom:1px solid var(--border-soft);padding:4px 0;">
+                    <summary style="display:flex;justify-content:space-between;cursor:pointer;list-style:none;align-items:center;">
+                        <span class="muted small">${escapeHTML(emp)} <span class="small">(${eb.rows.length})</span></span>
+                        <span>${fmtMoney(eb.total)}</span>
+                    </summary>
+                    <div style="padding:4px 0 2px 8px;">${recsHtml}</div>
+                </details>`;
+            }).join('')
             : `<div class="muted small">No salary records for ${earner} this FY.</div>`;
         const totalCombined = b.total + rentalShare;
+        const rentalCls = rentalShare < 0 ? 'stat-neg' : '';
+        // Only show the net-rental line when there's actually some rental activity.
+        const hasRental = rentalIncomeGross > 0 || rentalDeductions > 0;
         return `<div style="padding:10px 0;border-bottom:1px solid var(--border-soft);">
             <div class="bold" style="margin-bottom:4px;">${earner}</div>
             ${empRows}
-            ${rentalShare > 0 ? `<div class="row-spread" style="padding:4px 0;">
-                <span class="muted small">Tranmere rental (50% share)</span>
-                <span>${fmtMoney(rentalShare)}</span>
+            <div class="row-spread" style="padding:6px 0 2px;border-top:1px solid var(--border-soft);margin-top:4px;">
+                <span class="bold">Salary subtotal</span>
+                <span class="bold">${fmtMoney(b.total)}</span>
+            </div>
+            ${hasRental ? `<div class="row-spread" style="padding:4px 0;">
+                <span class="muted small">Tranmere net rental (50% share)</span>
+                <span class="${rentalCls}">${fmtMoney(rentalShare)}</span>
             </div>` : ''}
             <div class="row-spread" style="padding:6px 0 2px;border-top:1px solid var(--border-soft);margin-top:4px;">
                 <span class="bold">Total income</span>
@@ -1883,7 +1914,11 @@ function renderIncomeByEarner(all, fyStartYear) {
         </div>`;
     }).join('');
 
-    target.innerHTML = html + `<div class="muted small" style="padding:6px 0 0;">Note: rental income shown is gross. Deductions are listed in the property card above.</div>`;
+    // Footnote explaining how net rental was computed for transparency.
+    const note = (rentalIncomeGross > 0 || rentalDeductions > 0)
+        ? `Net Tranmere rental for this FY: ${fmtMoney(rentalIncomeGross)} gross income − ${fmtMoney(rentalDeductions)} deductible expenses = <strong>${fmtMoney(netRental)}</strong>. Each earner takes 50%.`
+        : `No Tranmere rental activity recorded for this FY.`;
+    target.innerHTML = html + `<div class="muted small" style="padding:8px 0 0;">${note}</div>`;
 }
 
 // Render a list of bucket rows; each bucket expands on tap to show its source records.
@@ -1921,13 +1956,12 @@ async function exportPropertyCSV() {
     const csvEscape = (s) => `"${String(s ?? '').replace(/"/g, '""')}"`;
     const header = ['Date','Property','Category','Subcategory','Description','Amount','Type','Tax bucket'];
     const lines = [header.map(csvEscape).join(',')];
-    const INVESTMENT = new Set(['Tranmere']); // keep aligned with renderProperty
     for (const r of matches) {
         const sub = recordSuburb(r);
         const k = `${r.category}|${r.subcategory}`;
         let type, bucket;
         if (r.category === 'Income') { type = 'Income'; bucket = 'Rental income'; }
-        else if (INVESTMENT.has(sub) && DEDUCTIBLE_MAP[k]) { type = 'Deductible'; bucket = DEDUCTIBLE_MAP[k]; }
+        else if (INVESTMENT_SUBURBS.has(sub) && DEDUCTIBLE_MAP[k]) { type = 'Deductible'; bucket = DEDUCTIBLE_MAP[k]; }
         else if (r.category === 'Housing' && r.subcategory === 'Mortgage') { type = 'Non-deductible'; bucket = 'Mortgage principal'; }
         else { type = 'Other'; bucket = `${r.category} / ${r.subcategory || ''}`; }
         lines.push([
