@@ -247,6 +247,10 @@
                     </div>
                 </div>
                 <div id="trendScopeLabel" style="margin-bottom:8px;font-size:12px;display:flex;align-items:center;gap:8px;"></div>
+                <label style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:12px;cursor:pointer;color:var(--text-muted);">
+                    <input type="checkbox" id="trendExcludeMaint" style="accent-color:var(--primary);">
+                    Exclude Housing / Maintenance (one-off build costs)
+                </label>
                 <div class="chart-wrap bar" style="overflow-x:auto;">
                     <canvas id="trendChart"></canvas>
                 </div>
@@ -315,6 +319,14 @@
             </div>
 
             <div class="card">
+                <div class="card-title">Personal income (FY)</div>
+                <div class="muted small" style="margin-bottom:10px;">
+                    Salary by employer per earner, plus a 50/50 share of Tranmere rental income. Uses the FY selected above.
+                </div>
+                <div id="incomeByEarner"></div>
+            </div>
+
+            <div class="card">
                 <button class="btn btn-secondary btn-block" id="propertyExportBtn">Export to CSV</button>
                 <div class="muted small" style="margin-top:6px;text-align:center;">Email or save to send to your accountant</div>
             </div>
@@ -353,6 +365,15 @@
                 </div>
                 <div id="renewalList"></div>
                 <div class="empty hidden" id="renewalEmpty">No renewals tracked yet.</div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Set income employer</div>
+                <div class="muted small" style="margin-bottom:10px;">
+                    Apply an employer name to all Salary records for an earner within a date range. Use this to retro-fill past entries quickly.
+                </div>
+                <div id="employerBulkTool"></div>
+                <div class="status-msg" id="employerBulkStatus"></div>
             </div>
 
             <div class="card">
@@ -474,6 +495,10 @@
         <div class="field">
             <label>Sub-category</label>
             <select id="editSubCat"></select>
+        </div>
+        <div class="field" id="editEmployerField" style="display:none;">
+            <label>Employer</label>
+            <input type="text" id="editEmployer" placeholder="e.g. Acme Pty Ltd">
         </div>
         <div class="field">
             <label>Date</label>

@@ -181,6 +181,9 @@ const state = {
     trendCategory: null,    // when set, trend is filtered to this category
     trendSubcategory: null, // when set, trend is filtered to this sub-category (within trendCategory if also set)
     trendMaWindow: 6,       // trailing window (months) for the moving-average line: 6 or 12
+    trendExcludeMaint: (() => {
+        try { return localStorage.getItem('trendExcludeMaint') === '1'; } catch { return false; }
+    })(),
     property: {
         suburb: 'Tranmere',       // 'Tranmere' | 'Willetton' | '__both__'
         fyStartYear: null         // calendar year that the selected FY started (1 Jul)
@@ -857,12 +860,22 @@ function openEditModal(rec) {
     $('editAmount').value = initialAmount;
     $('editDesc').value = rec.description;
     $('editDate').value = dateToISO(new Date(rec.date));
+    $('editEmployer').value = rec.employer || '';
     populateSelect($('editCat'), Object.keys(CATEGORIES), rec.category);
     populateSelect($('editSubCat'), CATEGORIES[rec.category]?.sub || [], rec.subcategory);
     $('editStatus').textContent = '';
     $('editTitle').textContent = `Edit · #${rec.id}`;
     updateEditAmountLabel(rec);
+    updateEditEmployerVisibility();
     $('editModal').classList.add('open');
+}
+
+// Show the Employer field only for Income/Salary records (other types don't have employers).
+function updateEditEmployerVisibility() {
+    const cat = $('editCat').value;
+    const sub = $('editSubCat').value;
+    const show = (cat === 'Income' && sub === 'Salary');
+    $('editEmployerField').style.display = show ? '' : 'none';
 }
 
 // Updates the Amount field's label + helper hint based on the current
@@ -898,8 +911,9 @@ $('editCat').addEventListener('change', (e) => {
     const cat = e.target.value;
     populateSelect($('editSubCat'), CATEGORIES[cat]?.sub || [], '');
     updateEditAmountLabel(null);
+    updateEditEmployerVisibility();
 });
-$('editSubCat').addEventListener('change', () => updateEditAmountLabel(null));
+$('editSubCat').addEventListener('change', () => { updateEditAmountLabel(null); updateEditEmployerVisibility(); });
 $('editDesc').addEventListener('input', () => updateEditAmountLabel(null));
 
 async function saveEdit() {
@@ -935,6 +949,14 @@ async function saveEdit() {
         } else if (oldRec && oldRec.grossAmount != null) {
             // Record is no longer a loan mortgage — clear the stale field.
             newRec.grossAmount = null;
+        }
+
+        // Employer field: only applies to Income/Salary records.
+        if (cat === 'Income' && sub === 'Salary') {
+            newRec.employer = $('editEmployer').value.trim();
+        } else if (oldRec && oldRec.employer != null) {
+            // Record is no longer Income/Salary — clear stale employer.
+            newRec.employer = null;
         }
 
         await updateExpense(id, newRec);
@@ -1278,6 +1300,13 @@ function renderTrend(all) {
     const today = startOfDay(new Date());
     const labels = [];
     const data = [];
+
+    // Optional filter: hide Housing/Maintenance (renovation/build) from both the
+    // bars and the moving-average line, so a normal monthly spend pattern is
+    // visible without those large one-off costs dominating.
+    if (state.trendExcludeMaint) {
+        all = all.filter(r => !(r.category === 'Housing' && r.subcategory === 'Maintenance'));
+    }
 
     const fCat = state.trendCategory;     // null or category name
     const fSub = state.trendSubcategory;  // null or sub-category name
@@ -1794,6 +1823,67 @@ async function renderProperty() {
     $('propertyNonDeductibles').innerHTML = ndSorted.length
         ? renderBucketRows(ndSorted)
         : `<div class="muted small">No other expenses for this period.</div>`;
+
+    // ---- Personal income (FY) card ----
+    renderIncomeByEarner(all, state.property.fyStartYear);
+}
+
+// Render Salary income grouped by employer per earner, plus a 50/50 share of
+// Tranmere rental income, for the given FY. Used by the Property tab.
+function renderIncomeByEarner(all, fyStartYear) {
+    const target = $('incomeByEarner');
+    if (!target) return;
+    if (fyStartYear == null) { target.innerHTML = ''; return; }
+    const { start, end } = fyRange(fyStartYear);
+    const inFY = (r) => {
+        const d = startOfDay(new Date(r.date));
+        return d >= start && d <= end;
+    };
+
+    // Salary by earner → employer → total
+    const buckets = {}; // earner → { employers: { name → total }, total }
+    for (const e of EARNERS) buckets[e] = { employers: {}, total: 0 };
+    for (const r of all) {
+        if (r.category !== 'Income' || r.subcategory !== 'Salary') continue;
+        if (!inFY(r)) continue;
+        const earner = detectEarner(r.description);
+        if (!earner) continue;
+        const emp = (r.employer || '').trim() || '(Unspecified)';
+        buckets[earner].employers[emp] = (buckets[earner].employers[emp] || 0) + r.amount;
+        buckets[earner].total += r.amount;
+    }
+
+    // 50/50 share of Tranmere rental income (description contains 'Tranmere').
+    const rentalTotal = all.filter(r => r.category === 'Income' && r.subcategory === 'Rental Income'
+        && (r.description || '').toLowerCase().includes('tranmere') && inFY(r))
+        .reduce((s, r) => s + r.amount, 0);
+    const rentalShare = rentalTotal / 2;
+
+    const html = EARNERS.map(earner => {
+        const b = buckets[earner];
+        const empEntries = Object.entries(b.employers).sort((a,c) => c[1] - a[1]);
+        const empRows = empEntries.length
+            ? empEntries.map(([emp, amt]) => `<div class="row-spread" style="padding:4px 0;">
+                <span class="muted small">${escapeHTML(emp)}</span>
+                <span>${fmtMoney(amt)}</span>
+            </div>`).join('')
+            : `<div class="muted small">No salary records for ${earner} this FY.</div>`;
+        const totalCombined = b.total + rentalShare;
+        return `<div style="padding:10px 0;border-bottom:1px solid var(--border-soft);">
+            <div class="bold" style="margin-bottom:4px;">${earner}</div>
+            ${empRows}
+            ${rentalShare > 0 ? `<div class="row-spread" style="padding:4px 0;">
+                <span class="muted small">Tranmere rental (50% share)</span>
+                <span>${fmtMoney(rentalShare)}</span>
+            </div>` : ''}
+            <div class="row-spread" style="padding:6px 0 2px;border-top:1px solid var(--border-soft);margin-top:4px;">
+                <span class="bold">Total income</span>
+                <span class="bold">${fmtMoney(totalCombined)}</span>
+            </div>
+        </div>`;
+    }).join('');
+
+    target.innerHTML = html + `<div class="muted small" style="padding:6px 0 0;">Note: rental income shown is gross. Deductions are listed in the property card above.</div>`;
 }
 
 // Render a list of bucket rows; each bucket expands on tap to show its source records.
@@ -2133,11 +2223,104 @@ async function maybeSeedRenewals() {
     if (seeds.length) console.log(`[renewals] Seeded ${seeds.length} policies from existing data.`);
 }
 
+/* ====================== INCOME / EMPLOYER ====================== */
+// Detect the earner of a Salary record from its description, case-insensitive
+// substring match. Works for "Yatin Salary", "Asha salary", "Yatin" etc.
+const EARNERS = ['Yatin', 'Asha'];
+
+function detectEarner(desc) {
+    const d = (desc || '').toLowerCase();
+    for (const e of EARNERS) if (d.includes(e.toLowerCase())) return e;
+    return null;
+}
+
+// Bulk-set employer for all Salary records of a given earner within [fromDate, toDate].
+// Used by the Settings tool. Returns count of records updated.
+async function bulkSetEmployer({ earner, employer, fromDate, toDate }) {
+    if (!earner || !employer) return 0;
+    const all = await getAllExpenses();
+    const from = fromDate ? startOfDay(parseDateString(fromDate)) : null;
+    const to   = toDate   ? startOfDay(parseDateString(toDate))   : null;
+    let updated = 0;
+    for (const r of all) {
+        if (r.category !== 'Income' || r.subcategory !== 'Salary') continue;
+        if (detectEarner(r.description) !== earner) continue;
+        const d = startOfDay(new Date(r.date));
+        if (from && d < from) continue;
+        if (to && d > to) continue;
+        if (r.employer === employer) continue; // already set
+        await updateExpense(r.id, { employer });
+        updated++;
+    }
+    if (updated > 0) invalidateCache();
+    return updated;
+}
+
+// Render the bulk-set-employer tool in Settings. One row per earner with
+// from/to/employer inputs and an Apply button. Counts shown as a guide.
+async function renderEmployerBulkTool() {
+    const target = $('employerBulkTool');
+    const all = await getAllExpenses();
+    const salaries = all.filter(r => r.category === 'Income' && r.subcategory === 'Salary');
+    target.innerHTML = '';
+    for (const earner of EARNERS) {
+        const earnerRecs = salaries.filter(r => detectEarner(r.description) === earner);
+        const total = earnerRecs.length;
+        const withEmployer = earnerRecs.filter(r => r.employer).length;
+        const sortedDates = earnerRecs.map(r => dateToISO(new Date(r.date))).sort();
+        const earliest = sortedDates[0] || '';
+        const latest = sortedDates[sortedDates.length - 1] || '';
+
+        // Distinct employers in use (informational)
+        const employersSeen = [...new Set(earnerRecs.map(r => (r.employer || '').trim()).filter(Boolean))];
+        const seenLine = employersSeen.length
+            ? `Employers on file: ${employersSeen.map(e => escapeHTML(e)).join(', ')}`
+            : 'No employer set on any record yet.';
+
+        const row = document.createElement('div');
+        row.style.cssText = 'padding:10px 0;border-bottom:1px solid var(--border-soft);';
+        row.innerHTML = `
+            <div class="bold" style="margin-bottom:4px;">${earner}</div>
+            <div class="muted small" style="margin-bottom:8px;">${total} salary record${total === 1 ? '' : 's'} (${withEmployer} with employer set). ${seenLine}</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
+                <div class="field" style="margin:0;">
+                    <label class="muted small">From</label>
+                    <input type="date" data-bulk-from="${earner}" value="${earliest}">
+                </div>
+                <div class="field" style="margin:0;">
+                    <label class="muted small">To</label>
+                    <input type="date" data-bulk-to="${earner}" value="${latest}">
+                </div>
+            </div>
+            <div class="field" style="margin:0 0 8px 0;">
+                <label class="muted small">Employer</label>
+                <input type="text" data-bulk-employer="${earner}" placeholder="e.g. Acme Pty Ltd">
+            </div>
+            <button class="btn btn-primary btn-sm" data-bulk-apply="${earner}">Apply to ${earner}'s records in range</button>
+        `;
+        target.appendChild(row);
+    }
+    target.querySelectorAll('[data-bulk-apply]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const earner = btn.dataset.bulkApply;
+            const employer = target.querySelector(`[data-bulk-employer="${earner}"]`).value.trim();
+            const fromDate = target.querySelector(`[data-bulk-from="${earner}"]`).value;
+            const toDate = target.querySelector(`[data-bulk-to="${earner}"]`).value;
+            if (!employer) { setStatus('employerBulkStatus', `Enter an employer name for ${earner}.`, 'error'); return; }
+            const count = await bulkSetEmployer({ earner, employer, fromDate, toDate });
+            setStatus('employerBulkStatus', `Set "${employer}" on ${count} ${earner} record${count === 1 ? '' : 's'}.`, 'success');
+            showToast(`Updated ${count} records`);
+            await renderEmployerBulkTool(); // re-render with refreshed counts
+        });
+    });
+}
+
 /* ====================== SETTINGS ====================== */
 
 async function renderSettings() {
     await renderBudgetEditor();
     await renderRenewalsManager();
+    await renderEmployerBulkTool();
     await renderFavoritesManager();
 }
 
@@ -2533,6 +2716,14 @@ $('trendScope').addEventListener('change', (e) => {
 
 $('trendMaWindow').addEventListener('change', (e) => {
     state.trendMaWindow = parseInt(e.target.value, 10) || 6;
+    ensureCache().then(all => renderTrend(all));
+});
+
+// Restore + listen for the 'Exclude Maintenance' toggle. Persisted in localStorage.
+$('trendExcludeMaint').checked = state.trendExcludeMaint;
+$('trendExcludeMaint').addEventListener('change', (e) => {
+    state.trendExcludeMaint = e.target.checked;
+    try { localStorage.setItem('trendExcludeMaint', state.trendExcludeMaint ? '1' : '0'); } catch {}
     ensureCache().then(all => renderTrend(all));
 });
 
