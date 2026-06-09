@@ -2,12 +2,13 @@
 // and adds 'budgets' and 'favorites' stores in version 2.
 
 const DB_NAME = 'ExpensesDB';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 export const STORE_EXPENSES  = 'expenses';
 export const STORE_BUDGETS   = 'budgets';
 export const STORE_FAVORITES = 'favorites';
 export const STORE_RENEWALS  = 'renewals';
+export const STORE_LOANS     = 'loans';
 
 let _dbPromise = null;
 
@@ -40,6 +41,11 @@ export function openDB() {
                 const renStore = db.createObjectStore(STORE_RENEWALS, { keyPath: 'id', autoIncrement: true });
                 renStore.createIndex('label', 'label', { unique: false });
                 renStore.createIndex('type', 'type', { unique: false });
+            }
+            // v4 - loans (per-property loan tracking with anchor balance + rate)
+            if (!db.objectStoreNames.contains(STORE_LOANS)) {
+                const loanStore = db.createObjectStore(STORE_LOANS, { keyPath: 'id', autoIncrement: true });
+                loanStore.createIndex('label', 'label', { unique: false });
             }
         };
         req.onsuccess = (event) => resolve(event.target.result);
@@ -235,6 +241,52 @@ export async function importAllRenewals(records) {
                 // JSON-roundtripped dates come back as strings; restore them as Date objects.
                 if (copy.lastPaidDate && !(copy.lastPaidDate instanceof Date)) {
                     copy.lastPaidDate = new Date(copy.lastPaidDate);
+                }
+                store.add(copy);
+            });
+        };
+        t.oncomplete = () => resolve();
+        t.onerror = (e) => reject(e.target.error);
+    });
+}
+
+/* ======================= Loans ======================= */
+
+export async function getAllLoans() {
+    const store = await tx(STORE_LOANS, 'readonly');
+    return reqToPromise(store.getAll());
+}
+
+export async function addLoan(loan) {
+    const store = await tx(STORE_LOANS, 'readwrite');
+    return reqToPromise(store.add(loan));
+}
+
+export async function updateLoan(id, newValues) {
+    const store = await tx(STORE_LOANS, 'readwrite');
+    const existing = await reqToPromise(store.get(id));
+    if (!existing) throw new Error(`Loan ${id} not found`);
+    Object.assign(existing, newValues);
+    existing.id = id;
+    return reqToPromise(store.put(existing));
+}
+
+export async function deleteLoan(id) {
+    const store = await tx(STORE_LOANS, 'readwrite');
+    return reqToPromise(store.delete(id));
+}
+
+export async function importAllLoans(records) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const t = db.transaction([STORE_LOANS], 'readwrite');
+        const store = t.objectStore(STORE_LOANS);
+        store.clear().onsuccess = () => {
+            records.forEach(rec => {
+                const copy = { ...rec };
+                delete copy.id;
+                if (copy.anchorDate && !(copy.anchorDate instanceof Date)) {
+                    copy.anchorDate = new Date(copy.anchorDate);
                 }
                 store.add(copy);
             });

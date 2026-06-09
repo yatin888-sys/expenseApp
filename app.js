@@ -9,7 +9,8 @@ import {
     setBudget, getAllBudgets, deleteBudget,
     addFavorite, getAllFavorites, deleteFavorite,
     getAllRenewals, addRenewal, updateRenewal, deleteRenewal,
-    importAllBudgets, importAllFavorites, importAllRenewals,
+    getAllLoans, addLoan, updateLoan, deleteLoan,
+    importAllBudgets, importAllFavorites, importAllRenewals, importAllLoans,
     parseDateString, dateToISO
 } from './db.js';
 
@@ -346,6 +347,7 @@ function setView(name) {
     if (name === 'browse') renderBrowse();
     if (name === 'insights') renderInsights();
     if (name === 'property') renderProperty();
+    if (name === 'loans') renderLoans();
     if (name === 'settings') renderSettings();
 }
 
@@ -2349,10 +2351,333 @@ async function renderEmployerBulkTool() {
     });
 }
 
+/* ====================== LOANS ====================== */
+// Per-property loan tracking. Anchor balance + date come from the user's most
+// recent bank statement; the app projects current balance forward by:
+//   currentBalance = anchorBalance + Σ(interest since anchor) − Σ(gross payments since anchor)
+//
+// Suburb match: a record belongs to a loan if its description contains the
+// loan's `label` (case-insensitive). Same convention used elsewhere in the app.
+
+function loanTxBetween(label, fromDate, toDate, allExpenses) {
+    const lower = label.toLowerCase();
+    let interest = 0, paymentGross = 0, paymentCount = 0;
+    for (const r of allExpenses) {
+        const d = startOfDay(new Date(r.date));
+        if (d <= fromDate || d > toDate) continue;
+        const desc = (r.description || '').toLowerCase();
+        if (!desc.includes(lower)) continue;
+        if (r.category === 'Financial Expenses' && r.subcategory === 'Interest') {
+            interest += r.amount;
+        } else if (r.category === 'Housing' && r.subcategory === 'Mortgage') {
+            const gross = (r.grossAmount != null) ? Number(r.grossAmount) : Number(r.amount);
+            paymentGross += gross;
+            paymentCount++;
+        }
+    }
+    return { interest, paymentGross, paymentCount };
+}
+
+function currentLoanBalance(loan, allExpenses) {
+    if (!loan.anchorBalance || !loan.anchorDate) return null;
+    const anchor = startOfDay(new Date(loan.anchorDate));
+    const today = startOfDay(new Date());
+    const { interest, paymentGross } = loanTxBetween(loan.label, anchor, today, allExpenses);
+    return loan.anchorBalance + interest - paymentGross;
+}
+
+// Infer annual rate from the most recent interest charge: monthly interest /
+// balance-at-that-moment × 12. Returns % or null if not computable.
+function inferredAnnualRate(loan, allExpenses) {
+    if (!loan.anchorBalance || !loan.anchorDate) return null;
+    const lower = loan.label.toLowerCase();
+    const anchor = startOfDay(new Date(loan.anchorDate));
+    const interests = allExpenses
+        .filter(r => r.category === 'Financial Expenses' && r.subcategory === 'Interest'
+                && (r.description || '').toLowerCase().includes(lower))
+        .filter(r => startOfDay(new Date(r.date)) >= anchor)
+        .sort((a,b) => new Date(b.date) - new Date(a.date));
+    if (interests.length === 0) return null;
+    const most = interests[0];
+    const mostDate = startOfDay(new Date(most.date));
+    // Balance just before that interest charge:
+    let balanceBefore = loan.anchorBalance;
+    for (const r of allExpenses) {
+        const d = startOfDay(new Date(r.date));
+        if (d <= anchor || d >= mostDate) continue;
+        const desc = (r.description || '').toLowerCase();
+        if (!desc.includes(lower)) continue;
+        if (r.category === 'Financial Expenses' && r.subcategory === 'Interest') balanceBefore += r.amount;
+        else if (r.category === 'Housing' && r.subcategory === 'Mortgage') {
+            balanceBefore -= (r.grossAmount != null) ? Number(r.grossAmount) : Number(r.amount);
+        }
+    }
+    if (balanceBefore <= 0) return null;
+    return (most.amount / balanceBefore) * 12 * 100;
+}
+
+// Sum of gross Mortgage payments in the last 3 months, divided by 3.
+function avgMonthlyPayment(loan, allExpenses) {
+    const lower = loan.label.toLowerCase();
+    const today = startOfDay(new Date());
+    const cutoff = new Date(today);
+    cutoff.setMonth(cutoff.getMonth() - 3);
+    let total = 0;
+    for (const r of allExpenses) {
+        const d = startOfDay(new Date(r.date));
+        if (d < cutoff || d > today) continue;
+        const desc = (r.description || '').toLowerCase();
+        if (!desc.includes(lower)) continue;
+        if (r.category === 'Housing' && r.subcategory === 'Mortgage') {
+            total += (r.grossAmount != null) ? Number(r.grossAmount) : Number(r.amount);
+        }
+    }
+    return total / 3;
+}
+
+// Standard amortization formula:
+//   n = -log(1 - (r*B)/M) / log(1 + r)
+// where B=balance, M=monthly payment, r=monthly rate (decimal).
+function projectPayoff(balance, monthlyPayment, annualRatePct) {
+    if (balance == null) return { months: null, totalInterest: null, payoffDate: null, neverPaysOff: false };
+    if (balance <= 0) return { months: 0, totalInterest: 0, payoffDate: new Date(), neverPaysOff: false };
+    if (!monthlyPayment || !annualRatePct || annualRatePct <= 0) {
+        return { months: null, totalInterest: null, payoffDate: null, neverPaysOff: false };
+    }
+    const r = annualRatePct / 100 / 12;
+    if (monthlyPayment <= balance * r) {
+        return { months: Infinity, totalInterest: Infinity, payoffDate: null, neverPaysOff: true };
+    }
+    const n = -Math.log(1 - (r * balance) / monthlyPayment) / Math.log(1 + r);
+    const months = Math.ceil(n);
+    const totalInterest = (monthlyPayment * months) - balance;
+    const payoff = new Date();
+    payoff.setMonth(payoff.getMonth() + months);
+    return { months, totalInterest, payoffDate: payoff, neverPaysOff: false };
+}
+
+function monthYearLabel(d) {
+    return d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+}
+
+async function renderLoans() {
+    await maybeSeedLoans();
+    const [loans, expenses] = await Promise.all([getAllLoans(), getAllExpenses()]);
+    const cardsTarget = $('loanCards');
+    const combinedTarget = $('loanCombined');
+    const combinedCard = $('loanCombinedCard');
+
+    cardsTarget.innerHTML = '';
+
+    // Per-loan totals for the combined card.
+    let totalBalance = 0, totalRemainingInterest = 0;
+    let latestPayoff = null;
+    let setupCount = 0;
+
+    for (const loan of loans) {
+        const setUp = loan.anchorBalance != null && loan.anchorDate != null;
+        const balance = setUp ? currentLoanBalance(loan, expenses) : null;
+        const inferredRate = setUp ? inferredAnnualRate(loan, expenses) : null;
+        const effectiveRate = (loan.currentRate != null) ? loan.currentRate : inferredRate;
+        const monthlyPmt = setUp ? avgMonthlyPayment(loan, expenses) : 0;
+        const proj = projectPayoff(balance, monthlyPmt, effectiveRate);
+
+        if (setUp) {
+            setupCount++;
+            if (balance != null) totalBalance += balance;
+            if (Number.isFinite(proj.totalInterest)) totalRemainingInterest += proj.totalInterest;
+            if (proj.payoffDate && (!latestPayoff || proj.payoffDate > latestPayoff)) latestPayoff = proj.payoffDate;
+        }
+
+        cardsTarget.innerHTML += renderLoanCard(loan, balance, inferredRate, effectiveRate, monthlyPmt, proj);
+    }
+
+    // Wire edit buttons.
+    cardsTarget.querySelectorAll('[data-edit-loan]').forEach(btn => {
+        btn.addEventListener('click', () => openLoanModal(parseInt(btn.dataset.editLoan, 10)));
+    });
+
+    // Combined card only shown when ≥2 loans set up.
+    if (setupCount >= 2) {
+        combinedCard.style.display = '';
+        const combinedPayoff = latestPayoff
+            ? `${monthYearLabel(latestPayoff)} (${Math.round((latestPayoff - new Date()) / 86400000 / 30.44 / 12 * 10) / 10} years)`
+            : '—';
+        combinedTarget.innerHTML = `
+            <div class="row-spread" style="padding:8px 0;">
+                <span>Total outstanding balance</span>
+                <span class="bold" style="font-size:22px;">${fmtMoney(totalBalance)}</span>
+            </div>
+            <div class="row-spread" style="padding:6px 0;border-top:1px solid var(--border-soft);">
+                <span>Combined payoff (latest of the two)</span>
+                <span>${combinedPayoff}</span>
+            </div>
+            <div class="row-spread" style="padding:6px 0;">
+                <span>Combined remaining interest</span>
+                <span class="bold stat-neg">${fmtMoney(totalRemainingInterest)}</span>
+            </div>
+        `;
+    } else {
+        combinedCard.style.display = 'none';
+    }
+}
+
+function renderLoanCard(loan, balance, inferredRate, effectiveRate, monthlyPmt, proj) {
+    const setUp = loan.anchorBalance != null && loan.anchorDate != null;
+    if (!setUp) {
+        return `<div class="card">
+            <div class="row-spread" style="margin-bottom:6px;">
+                <span class="card-title" style="margin:0;">${escapeHTML(loan.label)}</span>
+                <button class="btn btn-primary btn-sm" data-edit-loan="${loan.id}">Set up</button>
+            </div>
+            <div class="muted small">Enter the current outstanding balance and the date of your most recent statement to enable projections.</div>
+        </div>`;
+    }
+    const rateLabel = loan.currentRate != null
+        ? `${loan.currentRate.toFixed(2)}% (manual)`
+        : inferredRate != null
+            ? `${inferredRate.toFixed(2)}% (inferred)`
+            : '—';
+    let payoffLabel;
+    if (proj.neverPaysOff) payoffLabel = '⚠️ Payment too low to cover interest';
+    else if (proj.payoffDate == null) payoffLabel = effectiveRate == null ? 'Set rate to project' : 'No recent payments';
+    else payoffLabel = `${monthYearLabel(proj.payoffDate)} (~${(proj.months/12).toFixed(1)} years)`;
+
+    const remInterestLabel = proj.neverPaysOff ? '∞' : proj.totalInterest != null ? fmtMoney(proj.totalInterest) : '—';
+    const anchorLabel = `${fmtMoney(loan.anchorBalance)} on ${formatRowDate(loan.anchorDate)}`;
+
+    return `<div class="card">
+        <div class="row-spread" style="margin-bottom:6px;">
+            <span class="card-title" style="margin:0;">${escapeHTML(loan.label)}</span>
+            <button class="btn btn-secondary btn-sm" data-edit-loan="${loan.id}">Edit</button>
+        </div>
+        <div class="row-spread" style="padding:8px 0;">
+            <span>Current balance</span>
+            <span class="bold" style="font-size:20px;">${fmtMoney(balance)}</span>
+        </div>
+        <div class="muted small" style="padding:0 0 6px;">Anchor: ${anchorLabel}</div>
+        <div class="row-spread" style="padding:6px 0;border-top:1px solid var(--border-soft);">
+            <span>Current rate</span>
+            <span>${rateLabel}</span>
+        </div>
+        <div class="row-spread" style="padding:6px 0;">
+            <span>Avg monthly payment (last 3 mo)</span>
+            <span>${fmtMoney(monthlyPmt)}</span>
+        </div>
+        <div class="row-spread" style="padding:6px 0;">
+            <span>Estimated payoff</span>
+            <span>${payoffLabel}</span>
+        </div>
+        <div class="row-spread" style="padding:6px 0;">
+            <span>Total remaining interest</span>
+            <span class="bold stat-neg">${remInterestLabel}</span>
+        </div>
+    </div>`;
+}
+
+// One-time seed: create empty placeholders for Willetton + Tranmere on first launch.
+async function maybeSeedLoans() {
+    const existing = await getAllLoans();
+    if (existing.length > 0) return;
+    for (const suburb of ['Willetton', 'Tranmere']) {
+        await addLoan({ label: suburb, anchorBalance: null, anchorDate: null, currentRate: null, notes: '' });
+    }
+}
+
+// Settings list (CRUD entry point).
+async function renderLoansManager() {
+    const loans = await getAllLoans();
+    const list = $('loanManageList');
+    if (!list) return;
+    if (loans.length === 0) {
+        list.innerHTML = '<div class="muted small">No loans yet. Add one.</div>';
+        return;
+    }
+    list.innerHTML = loans.map(l => {
+        const sub = (l.anchorBalance != null && l.anchorDate != null)
+            ? `Anchor ${fmtMoney(l.anchorBalance)} on ${formatRowDate(l.anchorDate)}`
+            : 'Not set up';
+        return `<div class="renewal-row">
+            <div class="meta">
+                <div class="label">${escapeHTML(l.label)}</div>
+                <div class="sub">${sub}${l.currentRate != null ? ` · ${l.currentRate.toFixed(2)}% manual` : ''}</div>
+            </div>
+            <div class="actions">
+                <button class="btn btn-secondary btn-sm" data-edit-loan-set="${l.id}">Edit</button>
+            </div>
+        </div>`;
+    }).join('');
+    list.querySelectorAll('[data-edit-loan-set]').forEach(btn => {
+        btn.addEventListener('click', () => openLoanModal(parseInt(btn.dataset.editLoanSet, 10)));
+    });
+}
+
+// ---- Edit modal ----
+let editingLoanId = null;
+async function openLoanModal(id = null) {
+    editingLoanId = id;
+    if (id == null) {
+        $('loanModalTitle').textContent = 'New loan';
+        $('loanLabel').value = '';
+        $('loanAnchorBalance').value = '';
+        $('loanAnchorDate').value = '';
+        $('loanCurrentRate').value = '';
+        $('loanNotes').value = '';
+        $('loanDeleteBtn').style.display = 'none';
+    } else {
+        const loans = await getAllLoans();
+        const l = loans.find(x => x.id === id);
+        if (!l) return;
+        $('loanModalTitle').textContent = `Edit · ${l.label}`;
+        $('loanLabel').value = l.label || '';
+        $('loanAnchorBalance').value = l.anchorBalance != null ? l.anchorBalance : '';
+        $('loanAnchorDate').value = l.anchorDate ? dateToISO(new Date(l.anchorDate)) : '';
+        $('loanCurrentRate').value = l.currentRate != null ? l.currentRate : '';
+        $('loanNotes').value = l.notes || '';
+        $('loanDeleteBtn').style.display = '';
+    }
+    $('loanStatus').textContent = '';
+    $('loanModal').classList.add('open');
+}
+function closeLoanModal() {
+    $('loanModal').classList.remove('open');
+    editingLoanId = null;
+}
+async function saveLoan() {
+    const label = $('loanLabel').value.trim();
+    if (!label) { setStatus('loanStatus', 'Label is required.', 'error'); return; }
+    const anchorBal = $('loanAnchorBalance').value;
+    const anchorDt = $('loanAnchorDate').value;
+    const rate = $('loanCurrentRate').value;
+    const rec = {
+        label,
+        anchorBalance: anchorBal === '' ? null : parseFloat(anchorBal),
+        anchorDate: anchorDt ? parseDateString(anchorDt) : null,
+        currentRate: rate === '' ? null : parseFloat(rate),
+        notes: $('loanNotes').value.trim()
+    };
+    if (editingLoanId == null) await addLoan(rec);
+    else await updateLoan(editingLoanId, rec);
+    showToast('Saved');
+    closeLoanModal();
+    if (state.activeView === 'loans') renderLoans();
+    if (state.activeView === 'settings') renderLoansManager();
+}
+async function deleteLoanFromModal() {
+    if (editingLoanId == null) return;
+    if (!confirm('Delete this loan?')) return;
+    await deleteLoan(editingLoanId);
+    showToast('Deleted');
+    closeLoanModal();
+    if (state.activeView === 'loans') renderLoans();
+    if (state.activeView === 'settings') renderLoansManager();
+}
+
 /* ====================== SETTINGS ====================== */
 
 async function renderSettings() {
     await renderBudgetEditor();
+    await renderLoansManager();
     await renderRenewalsManager();
     await renderEmployerBulkTool();
     await renderFavoritesManager();
@@ -2423,19 +2748,21 @@ async function renderFavoritesManager() {
 
 async function exportData() {
     // Pull every store so a single export file is a complete backup.
-    const [expenses, budgets, favorites, renewals] = await Promise.all([
+    const [expenses, budgets, favorites, renewals, loans] = await Promise.all([
         getAllExpenses(),
         getAllBudgets(),
         getAllFavorites(),
-        getAllRenewals()
+        getAllRenewals(),
+        getAllLoans()
     ]);
     const out = {
-        formatVersion: 2,
+        formatVersion: 3,
         exportedAt: new Date().toISOString(),
         expenses:  expenses.map(r => ({ ...r, date: dateToISO(new Date(r.date)) })),
         budgets,
         favorites,
-        renewals:  renewals.map(r => ({ ...r, lastPaidDate: dateToISO(new Date(r.lastPaidDate)) }))
+        renewals:  renewals.map(r => ({ ...r, lastPaidDate: dateToISO(new Date(r.lastPaidDate)) })),
+        loans:     loans.map(l => ({ ...l, anchorDate: l.anchorDate ? dateToISO(new Date(l.anchorDate)) : null }))
     };
     const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -2444,14 +2771,14 @@ async function exportData() {
     a.download = 'expenses.json';
     a.click();
     URL.revokeObjectURL(url);
-    showToast(`Exported ${expenses.length} expenses · ${budgets.length} budgets · ${favorites.length} favorites · ${renewals.length} renewals`);
+    showToast(`Exported ${expenses.length} expenses · ${budgets.length} budgets · ${favorites.length} favorites · ${renewals.length} renewals · ${loans.length} loans`);
 }
 
 async function importDataFromFile(file) {
     try {
         const text = await file.text();
         const parsed = JSON.parse(text);
-        const imported = { expenses: 0, budgets: 0, favorites: 0, renewals: 0 };
+        const imported = { expenses: 0, budgets: 0, favorites: 0, renewals: 0, loans: 0 };
 
         if (Array.isArray(parsed)) {
             // Legacy format: a flat array of expenses (pre-v2 backups).
@@ -2465,13 +2792,14 @@ async function importDataFromFile(file) {
             if (Array.isArray(parsed.budgets))   { await importAllBudgets(parsed.budgets);     imported.budgets   = parsed.budgets.length; }
             if (Array.isArray(parsed.favorites)) { await importAllFavorites(parsed.favorites); imported.favorites = parsed.favorites.length; }
             if (Array.isArray(parsed.renewals))  { await importAllRenewals(parsed.renewals);   imported.renewals  = parsed.renewals.length; }
+            if (Array.isArray(parsed.loans))     { await importAllLoans(parsed.loans);         imported.loans     = parsed.loans.length; }
         } else {
             throw new Error('Invalid JSON');
         }
 
         invalidateCache();
         await refreshOverdueIndicators(); // re-evaluate banner/title after renewal restore
-        const msg = `Imported ${imported.expenses} expenses, ${imported.budgets} budgets, ${imported.favorites} favorites, ${imported.renewals} renewals.`;
+        const msg = `Imported ${imported.expenses} expenses, ${imported.budgets} budgets, ${imported.favorites} favorites, ${imported.renewals} renewals, ${imported.loans} loans.`;
         setStatus('settingsStatus', msg, 'success');
         showToast('Import complete');
     } catch (e) {
@@ -2798,9 +3126,16 @@ $('renewalSaveBtn').addEventListener('click', saveRenewal);
 $('renewalDeleteBtn').addEventListener('click', deleteRenewalFromModal);
 $('renewalModal').addEventListener('click', (e) => { if (e.target.id === 'renewalModal') closeRenewalModal(); });
 
+// Loans: add/edit modal
+$('loanAddBtn').addEventListener('click', () => openLoanModal(null));
+$('loanModalClose').addEventListener('click', closeLoanModal);
+$('loanSaveBtn').addEventListener('click', saveLoan);
+$('loanDeleteBtn').addEventListener('click', deleteLoanFromModal);
+$('loanModal').addEventListener('click', (e) => { if (e.target.id === 'loanModal') closeLoanModal(); });
+
 // keyboard escape closes modal/sheet
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { closeEditModal(); closeFilterSheet(); closeRenewalModal(); closeMonthPicker(); }
+    if (e.key === 'Escape') { closeEditModal(); closeFilterSheet(); closeRenewalModal(); closeMonthPicker(); closeLoanModal(); }
 });
 
 /* ====================== INIT ====================== */

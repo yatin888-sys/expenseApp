@@ -332,6 +332,29 @@
             </div>
         </section>
 
+        <!-- ============== LOANS VIEW ============== -->
+        <section class="view" id="view-loans" data-view="loans">
+            <header class="view-header">
+                <div>
+                    <h1>Loans</h1>
+                    <div class="subtitle">Balance, payoff projection, remaining interest</div>
+                </div>
+            </header>
+
+            <div class="card" id="loanCombinedCard" style="display:none;">
+                <div class="card-title">Combined</div>
+                <div id="loanCombined"></div>
+            </div>
+
+            <div id="loanCards"></div>
+
+            <div class="card">
+                <div class="muted small" style="text-align:center;">
+                    Set each loan's anchor balance and date from your most recent statement. The app projects balance forward using your interest + mortgage records.
+                </div>
+            </div>
+        </section>
+
         <!-- ============== SETTINGS VIEW ============== -->
         <section class="view" id="view-settings" data-view="settings">
             <header class="view-header">
@@ -356,6 +379,17 @@
                 <div style="height:8px;"></div>
                 <button class="btn btn-secondary btn-block" id="batchImportBtn">Batch Import (Image / PDF)</button>
                 <div class="status-msg" id="settingsStatus"></div>
+            </div>
+
+            <div class="card">
+                <div class="row-spread" style="margin-bottom:8px;">
+                    <span class="card-title" style="margin:0;">Loan accounts</span>
+                    <button class="btn btn-secondary btn-sm" id="loanAddBtn">+ Add</button>
+                </div>
+                <div id="loanManageList"></div>
+                <div class="muted small" style="margin-top:6px;">
+                    Each loan can be edited from the Loans tab too. Manual rate override only used if set; otherwise the rate is inferred from your most recent interest entry.
+                </div>
             </div>
 
             <div class="card">
@@ -411,6 +445,10 @@
         <button class="tab" data-tab="property">
             <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>
             Property
+        </button>
+        <button class="tab" data-tab="loans">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 8.5c-.6-.7-1.7-1.2-3-1.2-2 0-3 1-3 2.2 0 2.5 6 1.4 6 4 0 1.2-1 2.3-3 2.3-1.4 0-2.5-.5-3.1-1.2"/><path d="M12 5.5v1.8M12 16.7v1.8"/></svg>
+            Loans
         </button>
         <button class="tab" data-tab="settings">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
@@ -565,6 +603,45 @@
         </div>
         <button class="btn btn-primary btn-block btn-lg" id="renewalSaveBtn" style="margin-top:10px;">Save</button>
         <div class="status-msg" id="renewalStatus"></div>
+    </div>
+</div>
+
+<!-- ======================== LOAN MODAL ======================== -->
+<div class="modal-overlay" id="loanModal">
+    <div class="modal">
+        <div class="row-spread" style="margin-bottom:14px;">
+            <h2 id="loanModalTitle">Loan</h2>
+            <button class="icon-btn" id="loanModalClose">
+                <svg viewBox="0 0 24 24"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+            </button>
+        </div>
+        <div class="field">
+            <label>Label (suburb name)</label>
+            <input type="text" id="loanLabel" placeholder="e.g. Willetton">
+        </div>
+        <div class="field-row" style="gap:10px;">
+            <div class="field" style="flex:1;">
+                <label>Anchor balance ($)</label>
+                <input type="number" id="loanAnchorBalance" step="0.01" inputmode="decimal" placeholder="From latest statement">
+            </div>
+            <div class="field" style="flex:1;">
+                <label>Anchor date</label>
+                <input type="date" id="loanAnchorDate">
+            </div>
+        </div>
+        <div class="field">
+            <label>Current rate % (optional override)</label>
+            <input type="number" id="loanCurrentRate" step="0.01" inputmode="decimal" placeholder="Leave blank to infer">
+        </div>
+        <div class="field">
+            <label>Notes</label>
+            <input type="text" id="loanNotes" placeholder="e.g. P&I, fortnightly">
+        </div>
+        <div class="field-row" style="margin-top:6px;">
+            <button class="btn btn-danger" id="loanDeleteBtn">Delete</button>
+        </div>
+        <button class="btn btn-primary btn-block btn-lg" id="loanSaveBtn" style="margin-top:10px;">Save</button>
+        <div class="status-msg" id="loanStatus"></div>
     </div>
 </div>
 
