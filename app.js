@@ -2382,57 +2382,111 @@ function currentLoanBalance(loan, allExpenses) {
     if (!loan.anchorBalance || !loan.anchorDate) return null;
     const anchor = startOfDay(new Date(loan.anchorDate));
     const today = startOfDay(new Date());
-    const { interest, paymentGross } = loanTxBetween(loan.label, anchor, today, allExpenses);
+    // Cap the window at the END OF LAST COMPLETE MONTH. Interest for the current
+    // month usually hasn't been recorded yet, so including this month's payments
+    // (without the matching interest charge) would understate the balance.
+    const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+    endOfLastMonth.setHours(0, 0, 0, 0);
+    // If the anchor is already in / after the current month, the anchor balance
+    // is the source of truth — nothing to project from.
+    if (anchor > endOfLastMonth) return loan.anchorBalance;
+    const { interest, paymentGross } = loanTxBetween(loan.label, anchor, endOfLastMonth, allExpenses);
     return loan.anchorBalance + interest - paymentGross;
 }
 
 // Infer annual rate from the most recent interest charge: monthly interest /
-// balance-at-that-moment × 12. Returns % or null if not computable.
+// balance-at-that-moment × 12. Works regardless of whether the most recent
+// charge happened before or after the anchor.
 function inferredAnnualRate(loan, allExpenses) {
     if (!loan.anchorBalance || !loan.anchorDate) return null;
     const lower = loan.label.toLowerCase();
     const anchor = startOfDay(new Date(loan.anchorDate));
+
+    // Find the most recent interest charge for this suburb — no anchor filter.
     const interests = allExpenses
         .filter(r => r.category === 'Financial Expenses' && r.subcategory === 'Interest'
                 && (r.description || '').toLowerCase().includes(lower))
-        .filter(r => startOfDay(new Date(r.date)) >= anchor)
         .sort((a,b) => new Date(b.date) - new Date(a.date));
     if (interests.length === 0) return null;
     const most = interests[0];
     const mostDate = startOfDay(new Date(most.date));
-    // Balance just before that interest charge:
+
+    // Compute balance at start-of-day of mostDate (i.e. just before the charge hit).
+    // If the charge is AFTER the anchor: walk forward, replaying transactions.
+    // If the charge is BEFORE the anchor: walk backward from the anchor, REVERSING
+    // the effect of every transaction between mostDate and anchor (so we get back
+    // to the pre-charge balance).
     let balanceBefore = loan.anchorBalance;
-    for (const r of allExpenses) {
-        const d = startOfDay(new Date(r.date));
-        if (d <= anchor || d >= mostDate) continue;
-        const desc = (r.description || '').toLowerCase();
-        if (!desc.includes(lower)) continue;
-        if (r.category === 'Financial Expenses' && r.subcategory === 'Interest') balanceBefore += r.amount;
-        else if (r.category === 'Housing' && r.subcategory === 'Mortgage') {
-            balanceBefore -= (r.grossAmount != null) ? Number(r.grossAmount) : Number(r.amount);
+    if (mostDate >= anchor) {
+        for (const r of allExpenses) {
+            const d = startOfDay(new Date(r.date));
+            if (d <= anchor || d >= mostDate) continue;
+            const desc = (r.description || '').toLowerCase();
+            if (!desc.includes(lower)) continue;
+            if (r.category === 'Financial Expenses' && r.subcategory === 'Interest') balanceBefore += r.amount;
+            else if (r.category === 'Housing' && r.subcategory === 'Mortgage') {
+                balanceBefore -= (r.grossAmount != null) ? Number(r.grossAmount) : Number(r.amount);
+            }
+        }
+    } else {
+        // Backward walk: undo every transaction in [mostDate, anchor].
+        // The charge itself is at mostDate and IS undone in this loop, so balanceBefore
+        // ends up as the balance at the start of mostDate (i.e. pre-charge).
+        for (const r of allExpenses) {
+            const d = startOfDay(new Date(r.date));
+            if (d < mostDate || d > anchor) continue;
+            const desc = (r.description || '').toLowerCase();
+            if (!desc.includes(lower)) continue;
+            // Reverse effects: interest had added → subtract; payment had subtracted → add back.
+            if (r.category === 'Financial Expenses' && r.subcategory === 'Interest') balanceBefore -= r.amount;
+            else if (r.category === 'Housing' && r.subcategory === 'Mortgage') {
+                balanceBefore += (r.grossAmount != null) ? Number(r.grossAmount) : Number(r.amount);
+            }
         }
     }
     if (balanceBefore <= 0) return null;
     return (most.amount / balanceBefore) * 12 * 100;
 }
 
-// Sum of gross Mortgage payments in the last 3 months, divided by 3.
+// Monthly equivalent of recent gross repayments.
+// Strategy: take up to 6 most-recent mortgage records with grossAmount that
+// pre-date the current month (since this month's payments lack a corresponding
+// interest entry and would otherwise skew the figure). Records without
+// grossAmount are *skipped* — their `amount` is principal-only and would
+// massively underestimate the gross. Then convert sum→monthly using the actual
+// date span rather than a fixed /3, so fortnightly cadences that don't fit
+// cleanly into 3 calendar months are handled correctly.
 function avgMonthlyPayment(loan, allExpenses) {
     const lower = loan.label.toLowerCase();
     const today = startOfDay(new Date());
-    const cutoff = new Date(today);
-    cutoff.setMonth(cutoff.getMonth() - 3);
-    let total = 0;
-    for (const r of allExpenses) {
-        const d = startOfDay(new Date(r.date));
-        if (d < cutoff || d > today) continue;
-        const desc = (r.description || '').toLowerCase();
-        if (!desc.includes(lower)) continue;
-        if (r.category === 'Housing' && r.subcategory === 'Mortgage') {
-            total += (r.grossAmount != null) ? Number(r.grossAmount) : Number(r.amount);
-        }
+    const startOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    const records = allExpenses
+        .filter(r => r.category === 'Housing' && r.subcategory === 'Mortgage')
+        .filter(r => (r.description || '').toLowerCase().includes(lower))
+        .filter(r => r.grossAmount != null)
+        .filter(r => startOfDay(new Date(r.date)) < startOfCurrentMonth)
+        .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+    if (records.length === 0) return null;
+
+    const recent = records.slice(0, 6);
+    const total = recent.reduce((s, r) => s + Number(r.grossAmount), 0);
+
+    if (recent.length === 1) {
+        // Single record — assume fortnightly cadence (most common).
+        return Number(recent[0].grossAmount) * 26 / 12;
     }
-    return total / 3;
+
+    const newest = new Date(recent[0].date);
+    const oldest = new Date(recent[recent.length - 1].date);
+    const daysSpan = (newest - oldest) / 86400000;
+    if (daysSpan < 7) {
+        // Multiple records very close together — odd, fall back to per-record × 26/12.
+        return (total / recent.length) * 26 / 12;
+    }
+    // Standard: total/(days spanned) × average days per month.
+    return (total / daysSpan) * 30.44;
 }
 
 // Standard amortization formula:
