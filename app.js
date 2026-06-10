@@ -1086,23 +1086,39 @@ async function renderInsights() {
 
 function renderYoY(all, periodKey, currentSum) {
     const target = $('yoyContent');
-    // Build comparison to last year same period
-    let lyKey = periodKey;
-    let curR = periodRange(periodKey);
+    const curR = periodRange(periodKey);
     if (!curR) { target.innerHTML = '<div class="muted small">Pick a period to compare.</div>'; return; }
+
+    const today = startOfDay(new Date());
     const lyStart = new Date(curR.start); lyStart.setFullYear(lyStart.getFullYear() - 1);
-    const lyEnd = new Date(curR.end); lyEnd.setFullYear(lyEnd.getFullYear() - 1);
+    const lyEndFull = new Date(curR.end);  lyEndFull.setFullYear(lyEndFull.getFullYear() - 1);
+
+    // For an in-progress period (e.g. mid-May when "This Month" is picked) the
+    // current-side totals only cover days that have actually happened. The
+    // last-year side should be capped to the same elapsed days so the comparison
+    // is apples-to-apples. For completed periods (Previous Month etc.) the cap
+    // exceeds the period end, so we fall back to the full last-year range.
+    const elapsedMs = Math.max(0, today - curR.start);
+    const lyEndCapped = new Date(lyStart.getTime() + elapsedMs);
+    const lyEnd = lyEndCapped < lyEndFull ? lyEndCapped : lyEndFull;
+
+    const periodDays = (curR.end - curR.start) / 86400000;
+    const elapsedDays = elapsedMs / 86400000;
+
+    // Edge case: brand-new multi-day period (today IS the period start day).
+    // Comparison would be ~1 day vs ~1 day and not very informative.
+    if (periodDays >= 1 && elapsedDays < 1) {
+        target.innerHTML = `<div class="muted small">Not enough data yet for ${periodLabel(periodKey)} comparison.</div>`;
+        return;
+    }
+
     const lyRecs = all.filter(r => {
         const d = startOfDay(new Date(r.date));
         return d >= lyStart && d <= lyEnd;
     });
     const lySum = summarize(lyRecs);
 
-    const expDelta = currentSum.expense - lySum.expense;
-    const incDelta = currentSum.income - lySum.income;
-    const savDelta = currentSum.savings - lySum.savings;
     const pct = (a, b) => b === 0 ? null : ((a - b) / b * 100);
-
     function row(label, cur, prev, lowerIsBetter) {
         const delta = cur - prev;
         const p = pct(cur, prev);
@@ -1116,8 +1132,16 @@ function renderYoY(all, periodKey, currentSum) {
         </div>`;
     }
 
+    // Label: only mention "(to date) / (to same point)" when the period is
+    // multi-day AND currently in progress. Otherwise keep the original phrasing.
+    const isInProgress = today >= curR.start && today <= curR.end;
+    const isMultiDay = periodDays > 1;
+    const headerLabel = (isInProgress && isMultiDay)
+        ? `${periodLabel(periodKey)} (to date) vs same period last year (to same point)`
+        : `${periodLabel(periodKey)} vs same period last year`;
+
     target.innerHTML = `
-        <div class="muted small" style="margin-bottom:6px;">${periodLabel(periodKey)} vs same period last year</div>
+        <div class="muted small" style="margin-bottom:6px;">${headerLabel}</div>
         ${row('Income', currentSum.income, lySum.income, false)}
         ${row('Expense', currentSum.expense, lySum.expense, true)}
         ${row('Savings', currentSum.savings, lySum.savings, false)}
@@ -1518,10 +1542,17 @@ function renderQuickInsights(all, periodKey, recs) {
     const ONE_DAY = 86400000;
     const daysBetween = (a, b) => Math.round((startOfDay(new Date(b)) - startOfDay(new Date(a))) / ONE_DAY);
 
-    // Group non-income records by lowercased description
+    // Group non-income records by lowercased description.
+    // Also skip home-loan interest accruals (Financial Expenses / Interest with a
+    // Willetton/Tranmere description). Those notional charges roll into the loan
+    // balance — they aren't bank debits — so they shouldn't show up here as
+    // upcoming expenses. The actual loan repayments (Housing / Mortgage) still
+    // surface normally.
     const desc2List = {};
     all.forEach(r => {
         if (r.category === 'Income') return;
+        if (r.category === 'Financial Expenses' && r.subcategory === 'Interest'
+            && detectLoanSuburb(r.description)) return;
         const k = (r.description || '').trim().toLowerCase();
         if (!k) return;
         (desc2List[k] = desc2List[k] || []).push(r);
@@ -2382,15 +2413,14 @@ function currentLoanBalance(loan, allExpenses) {
     if (!loan.anchorBalance || !loan.anchorDate) return null;
     const anchor = startOfDay(new Date(loan.anchorDate));
     const today = startOfDay(new Date());
-    // Cap the window at the END OF LAST COMPLETE MONTH. Interest for the current
-    // month usually hasn't been recorded yet, so including this month's payments
-    // (without the matching interest charge) would understate the balance.
-    const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-    endOfLastMonth.setHours(0, 0, 0, 0);
-    // If the anchor is already in / after the current month, the anchor balance
-    // is the source of truth — nothing to project from.
-    if (anchor > endOfLastMonth) return loan.anchorBalance;
-    const { interest, paymentGross } = loanTxBetween(loan.label, anchor, endOfLastMonth, allExpenses);
+    // Include every transaction up to and including today so the displayed
+    // balance updates the moment you record a new mortgage payment (drops it)
+    // or a new interest entry (raises it). Note: between a fortnightly payment
+    // and the matching monthly interest entry, the balance shown will be
+    // briefly understated by ~half a month of interest — that's the conscious
+    // trade-off for real-time updates.
+    if (anchor > today) return loan.anchorBalance;
+    const { interest, paymentGross } = loanTxBetween(loan.label, anchor, today, allExpenses);
     return loan.anchorBalance + interest - paymentGross;
 }
 
